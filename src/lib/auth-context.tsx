@@ -10,11 +10,14 @@ interface User {
   firstName?: string;
   lastName?: string;
   isEmailVerified?: boolean;
+  isAdmin?: boolean;
+  role?: string | null;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  isLoggedIn: boolean;
   login: (identifier: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   loading: boolean;
@@ -26,6 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
     const storedToken = localStorage.getItem('gmt_token');
@@ -42,15 +46,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isEmailVerified: d.isEmailVerified as boolean | undefined,
             firstName: profile.firstName as string | undefined,
             lastName: profile.lastName as string | undefined,
+            isAdmin: d.isAdmin as boolean | undefined,
+            role: d.role as string | null | undefined,
           });
+          setIsLoggedIn(true);
         } else {
           localStorage.removeItem('gmt_token');
           setToken(null);
+          setIsLoggedIn(false);
         }
         setLoading(false);
       });
     } else {
       setLoading(false);
+      setIsLoggedIn(false);
     }
   }, []);
 
@@ -60,7 +69,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const d = res.data as { accessToken: string; user: User };
       localStorage.setItem('gmt_token', d.accessToken);
       setToken(d.accessToken);
-      setUser(d.user);
+      setUser({
+        ...d.user,
+        isAdmin: (d.user as User & { isAdmin?: boolean }).isAdmin,
+        role: (d.user as User & { role?: string | null }).role,
+      });
+      setIsLoggedIn(true);
       return { success: true };
     }
     return { success: false, message: res.message };
@@ -70,11 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem('gmt_token');
     setToken(null);
     setUser(null);
+    setIsLoggedIn(false);
     window.location.href = '/login';
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, isLoggedIn, login, logout, loading }}>
       {children}
     </AuthContext.Provider>
   );

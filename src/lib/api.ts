@@ -1,4 +1,5 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+import { ENV } from './environment';
+const API_URL = ENV.apiUrl;
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

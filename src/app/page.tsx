@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
+import { useAuth } from '@/lib/auth-context';
 
 export default function Home() {
+  const { isLoggedIn, logout } = useAuth();
   const mediaItems = [
     {
       tag: 'Press Release',
@@ -121,18 +123,37 @@ export default function Home() {
             </div>
 
             <div className="flex items-center space-x-3">
-              <Link
-                href="/login"
-                className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/register"
-                className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm hover:shadow-emerald-200 shadow-emerald-100 hover:-translate-y-0.5"
-              >
-                Join Movement
-              </Link>
+              {isLoggedIn ? (
+                <>
+                  <Link
+                    href="/dashboard"
+                    className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors"
+                  >
+                    Dashboard
+                  </Link>
+                  <button
+                    onClick={logout}
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm hover:shadow-emerald-200 shadow-emerald-100 hover:-translate-y-0.5"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/register"
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm hover:shadow-emerald-200 shadow-emerald-100 hover:-translate-y-0.5"
+                  >
+                    Join Movement
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>

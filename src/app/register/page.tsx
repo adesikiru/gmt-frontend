@@ -4,15 +4,23 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import BrandLogo from '@/components/BrandLogo';
 
 interface OrgItem { id: string; name: string; code?: string; }
 
 export default function RegisterPage() {
   const router = useRouter();
+  const { isLoggedIn, loading: authLoading } = useAuth();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+
+  useEffect(() => {
+    if (!authLoading && isLoggedIn) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, isLoggedIn, router]);
 
   // Form state
   const [form, setForm] = useState({

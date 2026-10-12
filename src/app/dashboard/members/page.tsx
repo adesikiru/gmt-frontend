@@ -40,10 +40,16 @@ export default function MembersPage() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
-  // Redirect if not logged in
+  // Redirect if not logged in or not admin
   useEffect(() => {
-    if (!loading && !token) router.push('/login');
-  }, [loading, token, router]);
+    if (!loading) {
+      if (!token) {
+        router.push('/login');
+      } else if (user && !user.isAdmin) {
+        router.push('/dashboard');
+      }
+    }
+  }, [loading, token, user, router]);
 
   const fetchMembers = useCallback(async () => {
     if (!token) return;

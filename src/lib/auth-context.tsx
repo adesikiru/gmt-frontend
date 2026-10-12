@@ -25,67 +25,108 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+/** Parse user fields out of the /auth/me response */
+function parseUser(d: Record<string, unknown>): User {
+  const profile = (d.memberProfile ?? {}) as Record<string, unknown>;
+  return {
+    id: d.id as string,
+    email: d.email as string | undefined,
+    phone: d.phone as string | undefined,
+    isEmailVerified: d.isEmailVerified as boolean | undefined,
+    // memberProfile may be nested OR fields may be top-level on login response
+    firstName: ((profile.firstName ?? d.firstName) as string) || undefined,
+    lastName: ((profile.lastName ?? d.lastName) as string) || undefined,
+    isAdmin: (d.isAdmin as boolean | undefined) ?? false,
+    role: d.role as string | null | undefined,
+  };
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
+  // On mount: restore session from localStorage
   useEffect(() => {
     const storedToken = localStorage.getItem('gmt_token');
-    if (storedToken) {
-      setToken(storedToken);
-      api.auth.me(storedToken).then((res) => {
+    const storedUser = localStorage.getItem('gmt_user');
+
+    if (!storedToken) {
+      setLoading(false);
+      return;
+    }
+
+    // Immediately restore cached user so header shows name instantly
+    if (storedUser) {
+      try {
+        const cached = JSON.parse(storedUser) as User;
+        setUser(cached);
+        setToken(storedToken);
+        setIsLoggedIn(true);
+      } catch {
+        // corrupted cache — ignore
+      }
+    }
+
+    // Then verify token with backend (refresh user data)
+    api.auth
+      .me(storedToken)
+      .then((res) => {
         if (res.success && res.data) {
-          const d = res.data as Record<string, unknown>;
-          const profile = (d.memberProfile ?? {}) as Record<string, unknown>;
-          setUser({
-            id: d.id as string,
-            email: d.email as string | undefined,
-            phone: d.phone as string | undefined,
-            isEmailVerified: d.isEmailVerified as boolean | undefined,
-            firstName: profile.firstName as string | undefined,
-            lastName: profile.lastName as string | undefined,
-            isAdmin: d.isAdmin as boolean | undefined,
-            role: d.role as string | null | undefined,
-          });
+          const parsed = parseUser(res.data as Record<string, unknown>);
+          setUser(parsed);
+          setToken(storedToken);
           setIsLoggedIn(true);
+          localStorage.setItem('gmt_user', JSON.stringify(parsed));
         } else {
+          // Token rejected by server — clear everything
+          localStorage.removeItem('gmt_token');
+          localStorage.removeItem('gmt_user');
+          setToken(null);
+          setUser(null);
+          setIsLoggedIn(false);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        // Backend unreachable — if we had a cached user, keep the session
+        // but do NOT set isLoggedIn=true if there was no cached user
+        if (!storedUser) {
           localStorage.removeItem('gmt_token');
           setToken(null);
           setIsLoggedIn(false);
         }
         setLoading(false);
       });
-    } else {
-      setLoading(false);
-      setIsLoggedIn(false);
-    }
   }, []);
 
   const login = async (identifier: string, password: string) => {
-    const res = await api.auth.login({ identifier, password });
-    if (res.success && res.data) {
-      const d = res.data as { accessToken: string; user: User };
-      localStorage.setItem('gmt_token', d.accessToken);
-      setToken(d.accessToken);
-      setUser({
-        ...d.user,
-        isAdmin: (d.user as User & { isAdmin?: boolean }).isAdmin,
-        role: (d.user as User & { role?: string | null }).role,
-      });
-      setIsLoggedIn(true);
-      return { success: true };
+    try {
+      const res = await api.auth.login({ identifier, password });
+      if (res.success && res.data) {
+        const d = res.data as { accessToken: string; user: Record<string, unknown> };
+        const parsed = parseUser(d.user);
+        localStorage.setItem('gmt_token', d.accessToken);
+        localStorage.setItem('gmt_user', JSON.stringify(parsed));
+        setToken(d.accessToken);
+        setUser(parsed);
+        setIsLoggedIn(true);
+        return { success: true };
+      }
+      return { success: false, message: res.message ?? 'Invalid credentials' };
+    } catch {
+      return { success: false, message: 'Cannot reach server. Check your connection.' };
     }
-    return { success: false, message: res.message };
   };
 
   const logout = () => {
     localStorage.removeItem('gmt_token');
+    localStorage.removeItem('gmt_user');
     setToken(null);
     setUser(null);
     setIsLoggedIn(false);
-    window.location.href = '/login';
+    window.location.href = '/';
   };
 
   return (

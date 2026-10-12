@@ -1,11 +1,50 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
+
+interface ApiEvent {
+  id: string;
+  title: string;
+  description: string;
+  location?: string;
+  startDate: string;
+  endDate?: string;
+  status: string;
+}
+
+function formatEventDate(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString('en-NG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+function formatEventTime(dateStr: string) {
+  const d = new Date(dateStr);
+  return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' WAT';
+}
 
 export default function Home() {
-  const { isLoggedIn, logout } = useAuth();
+  const { isLoggedIn, logout, user, loading } = useAuth();
+
+  // Mobile menu
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // Live events from API
+  const [events, setEvents] = useState<ApiEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
+
+  useEffect(() => {
+    api.events.list().then((res) => {
+      if (res.success && Array.isArray(res.data)) {
+        setEvents(res.data as ApiEvent[]);
+      }
+      setEventsLoading(false);
+    }).catch(() => setEventsLoading(false));
+  }, []);
+
   const mediaItems = [
     {
       tag: 'Press Release',
@@ -48,33 +87,6 @@ export default function Home() {
     },
   ];
 
-  const events = [
-    {
-      title: 'Ogun State GMT Annual Leadership Congress',
-      date: 'Saturday, Nov 15, 2026',
-      time: '10:00 AM WAT',
-      venue: 'June 12 Cultural Centre, Kuto, Abeokuta',
-      badge: 'State Summit',
-      desc: 'Bringing together ward coordinators, LGA directors, and state executives to align strategic community goals.',
-    },
-    {
-      title: 'Ward Coordinators Training & Digital Onboarding',
-      date: 'Wednesday, Nov 25, 2026',
-      time: '11:00 AM WAT',
-      venue: 'Ijebu-Ode Town Hall, Ijebu-Ode',
-      badge: 'Training Workshop',
-      desc: 'Hands-on training session for ward administrators on managing member verifications and voter record tracking.',
-    },
-    {
-      title: 'Grassroots Farmers & SME Cooperative Symposium',
-      date: 'Thursday, Dec 10, 2026',
-      time: '09:30 AM WAT',
-      venue: 'Sango-Ota Community Centre, Ota',
-      badge: 'Empowerment',
-      desc: 'Distribution of farm inputs and cooperative seed capital to rural ward farmers and market associations.',
-    },
-  ];
-
   const empowerments = [
     {
       title: 'Youth Tech & Digital Skills Initiative',
@@ -102,11 +114,18 @@ export default function Home() {
     },
   ];
 
+  // Close menu on resize to desktop
+  useEffect(() => {
+    const onResize = () => { if (window.innerWidth >= 768) setMenuOpen(false); };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
   return (
     <div className="min-h-screen bg-white text-gray-800 font-sans selection:bg-green-100 selection:text-green-800">
       {/* Top Notice Bar */}
       <div className="bg-gradient-to-r from-emerald-600 via-green-600 to-teal-700 text-white text-xs py-2 px-4 text-center font-medium tracking-wide">
-        🇳🇬 Grassroots Movement for Tinubu (GMT) — Pilot Phase Active in Ogun State across 20 LGAs & 236 Wards
+        🇳🇬 Grassroots Movement for Tinubu (GMT) — Pilot Phase Active in Ogun State across 20 LGAs &amp; 236 Wards
       </div>
 
       {/* Navigation */}
@@ -115,48 +134,170 @@ export default function Home() {
           <div className="flex justify-between h-20 items-center">
             <BrandLogo size="md" showSubtitle={true} href="/" />
 
+            {/* Desktop nav links */}
             <div className="hidden md:flex items-center space-x-8 text-sm font-semibold text-gray-600">
               <Link href="#about" className="hover:text-emerald-600 transition-colors">About Us</Link>
               <Link href="#events" className="hover:text-emerald-600 transition-colors">Events</Link>
               <Link href="#empowerments" className="hover:text-emerald-600 transition-colors">Empowerment</Link>
-              <Link href="#media" className="hover:text-emerald-600 transition-colors">Media & News</Link>
+              <Link href="#media" className="hover:text-emerald-600 transition-colors">Media &amp; News</Link>
             </div>
 
-            <div className="flex items-center space-x-3">
-              {isLoggedIn ? (
+            {/* Desktop auth buttons */}
+            <div className="hidden md:flex items-center space-x-3">
+              {loading ? (
+                <div className="w-24 h-9 bg-gray-100 animate-pulse rounded-xl" />
+              ) : isLoggedIn ? (
                 <>
-                  <Link
-                    href="/dashboard"
-                    className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors"
-                  >
-                    Dashboard
-                  </Link>
+                  {user?.firstName && (
+                    <span className="text-sm font-semibold text-gray-600">
+                      Hi, <span className="text-gray-900 font-bold">{user.firstName}</span>
+                    </span>
+                  )}
+                  {user?.isAdmin && (
+                    <Link
+                      href="/admin"
+                      className="text-xs font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200 px-2.5 py-1 rounded-lg hover:bg-emerald-100 transition-colors"
+                    >
+                      Admin
+                    </Link>
+                  )}
                   <button
                     onClick={logout}
-                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm hover:shadow-emerald-200 shadow-emerald-100 hover:-translate-y-0.5"
+                    className="text-gray-600 hover:text-red-600 px-3 py-2 text-sm font-semibold transition-colors rounded-lg hover:bg-gray-50"
                   >
                     Sign Out
                   </button>
+                  <Link
+                    href="/dashboard"
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm flex items-center space-x-1.5"
+                  >
+                    <span>Dashboard</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </Link>
                 </>
               ) : (
                 <>
-                  <Link
-                    href="/login"
-                    className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors"
-                  >
+                  <Link href="/login" className="text-emerald-700 hover:text-emerald-800 px-4 py-2 text-sm font-semibold transition-colors">
                     Sign In
                   </Link>
                   <Link
                     href="/register"
-                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm hover:shadow-emerald-200 shadow-emerald-100 hover:-translate-y-0.5"
+                    className="bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-sm font-bold hover:bg-emerald-700 transition-all shadow-sm"
                   >
                     Join Movement
                   </Link>
                 </>
               )}
             </div>
+
+            {/* Mobile: user name + hamburger */}
+            <div className="flex md:hidden items-center space-x-3">
+              {!loading && isLoggedIn && user?.firstName && (
+                <span className="text-xs font-semibold text-gray-700">
+                  Hi, <span className="font-bold">{user.firstName}</span>
+                </span>
+              )}
+              <button
+                id="mobile-menu-btn"
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Toggle menu"
+                className="p-2 rounded-xl text-gray-600 hover:bg-gray-100 transition-colors"
+              >
+                {menuOpen ? (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                  </svg>
+                )}
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Mobile menu dropdown */}
+        {menuOpen && (
+          <div className="md:hidden bg-white border-t border-gray-100 shadow-lg">
+            <div className="max-w-7xl mx-auto px-4 py-5 space-y-1">
+              {/* Nav links */}
+              {[
+                { href: '#about', label: 'About Us' },
+                { href: '#events', label: 'Events' },
+                { href: '#empowerments', label: 'Empowerment' },
+                { href: '#media', label: 'Media & News' },
+              ].map((link) => (
+                <a
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMenuOpen(false)}
+                  className="block px-4 py-3 text-sm font-semibold text-gray-700 rounded-xl hover:bg-emerald-50 hover:text-emerald-700 transition-colors"
+                >
+                  {link.label}
+                </a>
+              ))}
+
+              <div className="pt-3 border-t border-gray-100 mt-3 space-y-2">
+                {loading ? (
+                  <div className="h-10 bg-gray-100 animate-pulse rounded-xl" />
+                ) : isLoggedIn ? (
+                  <>
+                    {user?.firstName && (
+                      <div className="px-4 py-2 text-sm text-gray-500">
+                        Signed in as <span className="font-bold text-gray-800">{user.firstName} {user.lastName}</span>
+                      </div>
+                    )}
+                    <Link
+                      href="/dashboard"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center justify-center space-x-2 w-full bg-emerald-600 text-white font-bold py-3 rounded-xl text-sm hover:bg-emerald-700 transition-colors"
+                    >
+                      <span>Dashboard</span>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </Link>
+                    {user?.isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setMenuOpen(false)}
+                        className="block w-full text-center bg-emerald-50 text-emerald-800 font-bold py-3 rounded-xl text-sm border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                      >
+                        Admin Portal
+                      </Link>
+                    )}
+                    <button
+                      onClick={() => { setMenuOpen(false); logout(); }}
+                      className="w-full text-center py-3 rounded-xl text-sm font-semibold text-red-600 hover:bg-red-50 transition-colors border border-red-100"
+                    >
+                      Sign Out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/login"
+                      onClick={() => setMenuOpen(false)}
+                      className="block w-full text-center py-3 rounded-xl text-sm font-semibold text-emerald-700 border border-emerald-200 hover:bg-emerald-50 transition-colors"
+                    >
+                      Sign In
+                    </Link>
+                    <Link
+                      href="/register"
+                      onClick={() => setMenuOpen(false)}
+                      className="block w-full text-center bg-emerald-600 text-white font-bold py-3 rounded-xl text-sm hover:bg-emerald-700 transition-colors shadow-sm"
+                    >
+                      Join the Movement
+                    </Link>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </nav>
 
       {/* Hero Section */}
@@ -180,16 +321,21 @@ export default function Home() {
           </h1>
 
           <p className="text-lg sm:text-xl text-gray-600 max-w-2xl mx-auto mb-10 leading-relaxed font-normal">
-            The Grassroots Movement for Tinubu (GMT) connects voters, community leaders, and visionaries. 
+            The Grassroots Movement for Tinubu (GMT) connects voters, community leaders, and visionaries.
             Starting from Ogun State, we build an organized, audited, and progressive movement.
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
-              href="/register"
-              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-base hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 hover:-translate-y-0.5 text-center"
+              href={isLoggedIn ? '/dashboard' : '/register'}
+              className="w-full sm:w-auto bg-emerald-600 text-white px-8 py-4 rounded-xl font-bold text-base hover:bg-emerald-700 transition-all shadow-lg shadow-emerald-200 hover:-translate-y-0.5 text-center flex items-center justify-center space-x-2"
             >
-              Register as a Member
+              <span>{isLoggedIn ? 'Go to Dashboard' : 'Register as a Member'}</span>
+              {isLoggedIn && (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              )}
             </Link>
             <Link
               href="#about"
@@ -226,13 +372,13 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
-              Our Organizational Blueprint
+              Who We Are
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-4 mb-4">
-              Structured for Authentic Representation
+              A Movement Built From the Ground Up
             </h2>
-            <p className="text-gray-600">
-              GMT operates on a decentralized hierarchical model, guaranteeing every verified Nigerian citizen has a direct voice in national governance and community development.
+            <p className="text-gray-600 leading-relaxed">
+              GMT is a structured, technology-powered political mobilization platform designed to organize citizens at every level of Nigeria's democratic structure — from the smallest polling unit to the national assembly.
             </p>
           </div>
 
@@ -241,9 +387,9 @@ export default function Home() {
               <div className="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg mb-6 shadow-sm">
                 01
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Ward & Polling Unit Focus</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">Digital Membership Registry</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Empowerment begins where real citizens reside. Every member is verified with their respective polling unit and voter identification for maximum authenticity.
+                Every member is uniquely identified from their polling unit through biometric data, NIN, and voter card records — creating Nigeria's first verified grassroots digital registry.
               </p>
             </div>
 
@@ -251,9 +397,9 @@ export default function Home() {
               <div className="w-12 h-12 bg-emerald-600 text-white rounded-xl flex items-center justify-center font-bold text-lg mb-6 shadow-sm">
                 02
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Auditable & Transparent</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">Ward-Level Governance</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Role-based administrative controls (RBAC) and immutable audit logging ensure that leadership appointments and community decisions remain accountable.
+                Dedicated ward coordinators, LGA directors, and state executives manage community activities, attendance records, and empowerment delivery through our platform.
               </p>
             </div>
 
@@ -270,7 +416,7 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming Events Section */}
+      {/* Upcoming Events Section — Live from API */}
       <section id="events" className="py-24 bg-emerald-50/30 border-t border-b border-emerald-100/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row md:items-end justify-between mb-16">
@@ -283,48 +429,64 @@ export default function Home() {
               </h2>
             </div>
             <Link
-              href="/register"
+              href={isLoggedIn ? '/dashboard' : '/register'}
               className="mt-4 md:mt-0 text-sm font-bold text-emerald-600 hover:text-emerald-700 flex items-center space-x-1"
             >
-              <span>Register to attend any event</span>
+              <span>{isLoggedIn ? 'View all events in dashboard' : 'Register to attend any event'}</span>
               <span>&rarr;</span>
             </Link>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            {events.map((evt, idx) => (
-              <div
-                key={idx}
-                className="bg-white rounded-2xl p-7 border border-emerald-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">
-                      {evt.badge}
-                    </span>
-                    <span className="text-xs font-medium text-gray-400">{evt.time}</span>
+          {eventsLoading ? (
+            <div className="grid md:grid-cols-3 gap-8">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="bg-white rounded-2xl p-7 border border-emerald-100 animate-pulse h-64" />
+              ))}
+            </div>
+          ) : events.length === 0 ? (
+            <div className="text-center py-16">
+              <div className="text-5xl mb-4">📅</div>
+              <h3 className="text-xl font-bold text-gray-700 mb-2">No Events Scheduled Yet</h3>
+              <p className="text-gray-500 text-sm">Check back soon — the admin team will publish upcoming events here.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-3 gap-8">
+              {events.slice(0, 6).map((evt) => (
+                <div
+                  key={evt.id}
+                  className="bg-white rounded-2xl p-7 border border-emerald-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">
+                        GMT Event
+                      </span>
+                      <span className="text-xs font-medium text-gray-400">{formatEventTime(evt.startDate)}</span>
+                    </div>
+                    <h3 className="text-xl font-bold text-gray-900 mb-3 leading-snug">
+                      {evt.title}
+                    </h3>
+                    <p className="text-gray-600 text-sm mb-6 leading-relaxed line-clamp-3">
+                      {evt.description}
+                    </p>
                   </div>
-                  <h3 className="text-xl font-bold text-gray-900 mb-3 leading-snug">
-                    {evt.title}
-                  </h3>
-                  <p className="text-gray-600 text-sm mb-6 leading-relaxed">
-                    {evt.desc}
-                  </p>
-                </div>
 
-                <div className="pt-4 border-t border-gray-100">
-                  <div className="text-xs font-semibold text-emerald-700 mb-1">{evt.date}</div>
-                  <div className="text-xs text-gray-500 mb-4">{evt.venue}</div>
-                  <Link
-                    href="/register"
-                    className="block text-center bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 font-semibold text-sm py-2.5 rounded-xl transition-colors"
-                  >
-                    RSVP / Join In
-                  </Link>
+                  <div className="pt-4 border-t border-gray-100">
+                    <div className="text-xs font-semibold text-emerald-700 mb-1">{formatEventDate(evt.startDate)}</div>
+                    {evt.location && (
+                      <div className="text-xs text-gray-500 mb-4">📍 {evt.location}</div>
+                    )}
+                    <Link
+                      href={isLoggedIn ? '/dashboard' : '/register'}
+                      className="block text-center bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 font-semibold text-sm py-2.5 rounded-xl transition-colors"
+                    >
+                      {isLoggedIn ? 'RSVP in Dashboard' : 'Register to Join'}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
@@ -374,10 +536,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
-              Newsroom & Insights
+              Newsroom &amp; Insights
             </span>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-4 mb-4">
-              GMT Media & Press Releases
+              GMT Media &amp; Press Releases
             </h2>
             <p className="text-gray-600">
               Stay informed with official announcements, field updates, and multimedia highlights from our grassroots activities.
@@ -429,18 +591,32 @@ export default function Home() {
             Take part in shaping policies, receiving grassroots empowerment, and securing democratic engagement across Ogun State and Nigeria.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link
-              href="/register"
-              className="w-full sm:w-auto bg-white text-emerald-800 font-bold px-8 py-4 rounded-xl hover:bg-emerald-50 transition-colors shadow-lg"
-            >
-              Sign Up Now (Free)
-            </Link>
-            <Link
-              href="/login"
-              className="w-full sm:w-auto bg-emerald-800/60 border border-emerald-400 text-white font-bold px-8 py-4 rounded-xl hover:bg-emerald-800 transition-colors"
-            >
-              Already Registered? Log In
-            </Link>
+            {isLoggedIn ? (
+              <Link
+                href="/dashboard"
+                className="w-full sm:w-auto bg-white text-emerald-800 font-bold px-8 py-4 rounded-xl hover:bg-emerald-50 transition-colors shadow-lg flex items-center justify-center space-x-2"
+              >
+                <span>Access Member Dashboard</span>
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                </svg>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/register"
+                  className="w-full sm:w-auto bg-white text-emerald-800 font-bold px-8 py-4 rounded-xl hover:bg-emerald-50 transition-colors shadow-lg"
+                >
+                  Sign Up Now (Free)
+                </Link>
+                <Link
+                  href="/login"
+                  className="w-full sm:w-auto bg-emerald-800/60 border border-emerald-400 text-white font-bold px-8 py-4 rounded-xl hover:bg-emerald-800 transition-colors"
+                >
+                  Already Registered? Log In
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </section>
@@ -462,18 +638,29 @@ export default function Home() {
               <h4 className="text-white text-sm font-bold uppercase tracking-wider mb-4">Navigation</h4>
               <ul className="space-y-2 text-sm">
                 <li><Link href="#about" className="hover:text-emerald-400 transition-colors">About Movement</Link></li>
-                <li><Link href="#events" className="hover:text-emerald-400 transition-colors">Events & Congress</Link></li>
+                <li><Link href="#events" className="hover:text-emerald-400 transition-colors">Events &amp; Congress</Link></li>
                 <li><Link href="#empowerments" className="hover:text-emerald-400 transition-colors">Empowerment Funds</Link></li>
-                <li><Link href="#media" className="hover:text-emerald-400 transition-colors">Press & Media</Link></li>
+                <li><Link href="#media" className="hover:text-emerald-400 transition-colors">Press &amp; Media</Link></li>
               </ul>
             </div>
 
             <div>
               <h4 className="text-white text-sm font-bold uppercase tracking-wider mb-4">Quick Links</h4>
               <ul className="space-y-2 text-sm">
-                <li><Link href="/register" className="hover:text-emerald-400 transition-colors">Join as Member</Link></li>
-                <li><Link href="/login" className="hover:text-emerald-400 transition-colors">Member Sign In</Link></li>
-                <li><Link href="/admin" className="hover:text-emerald-400 transition-colors">Admin Portal</Link></li>
+                {isLoggedIn ? (
+                  <>
+                    <li><Link href="/dashboard" className="hover:text-emerald-400 transition-colors font-semibold text-emerald-300">My Dashboard</Link></li>
+                    {user?.isAdmin && (
+                      <li><Link href="/admin" className="hover:text-emerald-400 transition-colors">Admin Portal</Link></li>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <li><Link href="/register" className="hover:text-emerald-400 transition-colors">Join as Member</Link></li>
+                    <li><Link href="/login" className="hover:text-emerald-400 transition-colors">Member Sign In</Link></li>
+                    <li><Link href="/admin" className="hover:text-emerald-400 transition-colors">Admin Portal</Link></li>
+                  </>
+                )}
               </ul>
             </div>
           </div>

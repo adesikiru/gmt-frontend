@@ -16,9 +16,14 @@ export default function DashboardLayout({
 
   const navItems = [
     { label: 'Overview', href: '/dashboard', icon: '📊' },
-    { label: 'Members', href: '/dashboard/members', icon: '👥' },
     { label: 'Events', href: '/dashboard/events', icon: '📅' },
     { label: 'Settings', href: '/dashboard/settings', icon: '⚙️' },
+    ...(user?.isAdmin
+      ? [
+          { label: 'Members Directory', href: '/dashboard/members', icon: '👥' },
+          { label: 'Admin Portal', href: '/admin', icon: '🛡️' },
+        ]
+      : []),
   ];
 
   const handleLogout = () => {

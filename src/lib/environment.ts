@@ -13,7 +13,7 @@ export const BACKEND_URLS = {
   // Local development backend
   local: 'http://localhost:4000',
   // Hosted / Cloud production backend (Render default)
-  hosted: 'https://gmt-backend.onrender.com',
+  hosted: 'https://gmt-backend-m5yp.onrender.com',
 } as const;
 
 export function getApiUrl(): string {

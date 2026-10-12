@@ -12,7 +12,8 @@ async function request<T>(
   path: string,
   options?: RequestInit,
 ): Promise<ApiResponse<T>> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const baseUrl = ENV.apiUrl;
+  const res = await fetch(`${baseUrl}${path}`, {
     headers: { 'Content-Type': 'application/json' },
     ...options,
   });

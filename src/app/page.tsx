@@ -1,4 +1,5 @@
 'use client';
+// Build trigger: fix-vercel-prerender-v1.0.1
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';

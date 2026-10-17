@@ -21,6 +21,7 @@ interface AuthContextType {
   login: (identifier: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => void;
   loading: boolean;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -120,6 +121,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const refreshUser = async () => {
+    const currentToken = token || localStorage.getItem('gmt_token');
+    if (!currentToken) return;
+    try {
+      const res = await api.auth.me(currentToken);
+      if (res.success && res.data) {
+        const parsed = parseUser(res.data as Record<string, unknown>);
+        setUser(parsed);
+        localStorage.setItem('gmt_user', JSON.stringify(parsed));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem('gmt_token');
     localStorage.removeItem('gmt_user');
@@ -130,7 +146,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoggedIn, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token, isLoggedIn, login, logout, loading, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

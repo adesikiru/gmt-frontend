@@ -52,6 +52,17 @@ interface EmpowermentItem {
   createdAt?: string;
 }
 
+interface NewsItem {
+  id: string;
+  title: string;
+  slug?: string;
+  excerpt?: string;
+  content: string;
+  status?: string;
+  publishedAt?: string;
+  createdAt?: string;
+}
+
 const statusColors: Record<string, string> = {
   PENDING: 'bg-amber-100 text-amber-800 border-amber-200',
   VERIFIED: 'bg-emerald-100 text-emerald-800 border-emerald-200',
@@ -64,7 +75,7 @@ export default function AdminDashboard() {
   const router = useRouter();
 
   // Navigation tab
-  const [activeTab, setActiveTab] = useState<'members' | 'events' | 'empowerment'>('members');
+  const [activeTab, setActiveTab] = useState<'members' | 'events' | 'empowerment' | 'news'>('members');
 
   // Members state
   const [members, setMembers] = useState<Member[]>([]);
@@ -103,6 +114,18 @@ export default function AdminDashboard() {
     publishNow: true,
   });
   const [creatingEmpowerment, setCreatingEmpowerment] = useState(false);
+
+  // News state
+  const [news, setNews] = useState<NewsItem[]>([]);
+  const [loadingNews, setLoadingNews] = useState(true);
+  const [showNewsModal, setShowNewsModal] = useState(false);
+  const [newNews, setNewNews] = useState({
+    title: '',
+    excerpt: '',
+    content: '',
+    publishNow: true,
+  });
+  const [creatingNews, setCreatingNews] = useState(false);
 
   useEffect(() => {
     if (!loading) {
@@ -170,6 +193,22 @@ export default function AdminDashboard() {
     setLoadingEmpowerments(false);
   }, []);
 
+  // Fetch News - Live official press releases from API
+  const fetchNews = useCallback(async () => {
+    setLoadingNews(true);
+    try {
+      const res = await api.news.list();
+      if (res.success && Array.isArray(res.data)) {
+        setNews(res.data as NewsItem[]);
+      } else {
+        setNews([]);
+      }
+    } catch {
+      setNews([]);
+    }
+    setLoadingNews(false);
+  }, []);
+
   useEffect(() => {
     fetchMembers();
   }, [fetchMembers]);
@@ -181,6 +220,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchEmpowerments();
   }, [fetchEmpowerments]);
+
+  useEffect(() => {
+    fetchNews();
+  }, [fetchNews]);
 
   // Admin Update Member Status
   const handleAction = async (action: 'verify' | 'reject' | 'suspend' | 'restore', id: string) => {
@@ -322,6 +365,57 @@ export default function AdminDashboard() {
     }
   };
 
+  // Create Press Release / News
+  const handleCreateNews = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newNews.title || !newNews.content) return;
+    setCreatingNews(true);
+
+    try {
+      if (token) {
+        const res = await api.news.create(token, {
+          title: newNews.title,
+          excerpt: newNews.excerpt || undefined,
+          content: newNews.content,
+        });
+        if (res.success && res.data) {
+          const created = res.data as { id?: string };
+          if (newNews.publishNow && created.id) {
+            await api.news.publish(token, created.id);
+          }
+          setShowNewsModal(false);
+          setNewNews({
+            title: '',
+            excerpt: '',
+            content: '',
+            publishNow: true,
+          });
+          await fetchNews();
+          alert('Press release published successfully!');
+        } else {
+          alert(res.message || 'Failed to create press release');
+        }
+      }
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create press release. Please check backend connection.');
+    }
+    setCreatingNews(false);
+  };
+
+  // Delete Press Release / News
+  const handleDeleteNews = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this press release?')) return;
+    try {
+      if (token) {
+        await api.news.delete(token, id);
+        await fetchNews();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   // Filtered members by search query and status
   const filteredMembers = members.filter((m) => {
     const fullName = `${m.profile?.firstName ?? ''} ${m.profile?.lastName ?? ''}`.toLowerCase();
@@ -407,6 +501,19 @@ export default function AdminDashboard() {
                 {empowerments.length}
               </span>
             </button>
+            <button
+              onClick={() => setActiveTab('news')}
+              className={`px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center space-x-2 ${
+                activeTab === 'news'
+                  ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-200'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
+              }`}
+            >
+              <span>📰 Press Releases & Media</span>
+              <span className="ml-1.5 px-2 py-0.5 text-xs rounded-full bg-white/20">
+                {news.length}
+              </span>
+            </button>
           </div>
 
           {activeTab === 'events' && (
@@ -424,6 +531,15 @@ export default function AdminDashboard() {
               className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-sm hover:shadow-emerald-200 shadow-emerald-100 flex items-center space-x-2 transition-all hover:-translate-y-0.5"
             >
               <span>＋ Create Empowerment Program</span>
+            </button>
+          )}
+
+          {activeTab === 'news' && (
+            <button
+              onClick={() => setShowNewsModal(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm px-5 py-2.5 rounded-xl shadow-sm hover:shadow-emerald-200 shadow-emerald-100 flex items-center space-x-2 transition-all hover:-translate-y-0.5"
+            >
+              <span>＋ Publish Press Release</span>
             </button>
           )}
         </div>
@@ -809,6 +925,71 @@ export default function AdminDashboard() {
             )}
           </div>
         )}
+
+        {/* TAB 4: PRESS RELEASES & MEDIA */}
+        {activeTab === 'news' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Official Press Releases &amp; Media</h2>
+                <p className="text-xs text-gray-500">
+                  Publish official statements, voter sensitization updates, and news to the public landing page.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowNewsModal(true)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
+              >
+                ＋ Add Press Release
+              </button>
+            </div>
+
+            {loadingNews ? (
+              <div className="flex justify-center py-20">
+                <div className="animate-spin w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full"></div>
+              </div>
+            ) : news.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-gray-100 p-16 text-center text-gray-400 space-y-2">
+                <div className="text-3xl">📰</div>
+                <h3 className="font-bold text-gray-700 text-base">No press releases published yet.</h3>
+                <p className="text-xs text-gray-400">
+                  Click &quot;Add Press Release&quot; above to publish official GMT media releases.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {news.map((item) => (
+                  <div
+                    key={item.id}
+                    className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-start">
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                          {item.status || 'PUBLISHED'}
+                        </span>
+                        <button
+                          onClick={() => handleDeleteNews(item.id)}
+                          className="text-gray-400 hover:text-rose-600 text-xs font-bold transition-colors"
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                      <h3 className="text-base font-black text-gray-900 leading-snug">{item.title}</h3>
+                      <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">
+                        {item.excerpt || item.content}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-gray-100 mt-4 text-xs text-gray-400">
+                      📅 {item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('en-NG', { month: 'short', day: 'numeric', year: 'numeric' }) : 'Official Press'}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </main>
 
       {/* MEMBER DETAILS MODAL */}
@@ -1127,6 +1308,90 @@ export default function AdminDashboard() {
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
                 >
                   {creatingEmpowerment ? 'Creating...' : 'Publish Initiative'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE NEWS / PRESS RELEASE MODAL */}
+      {showNewsModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-4">
+            <div className="flex justify-between items-center border-b border-gray-100 pb-3">
+              <h3 className="text-lg font-black text-gray-900">Publish Press Release / Story</h3>
+              <button
+                onClick={() => setShowNewsModal(false)}
+                className="text-gray-400 hover:text-gray-600 text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateNews} className="space-y-4 text-xs font-bold">
+              <div>
+                <label className="block text-gray-700 mb-1">Headline / Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. GMT Ogun State Digital Grassroots Portal Officially Unveiled"
+                  value={newNews.title}
+                  onChange={(e) => setNewNews({ ...newNews, title: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 mb-1">Brief Excerpt / Summary</label>
+                <input
+                  type="text"
+                  placeholder="1-2 sentence overview for the landing page card..."
+                  value={newNews.excerpt}
+                  onChange={(e) => setNewNews({ ...newNews, excerpt: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
+                />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 mb-1">Full Content / Article Body *</label>
+                <textarea
+                  rows={4}
+                  required
+                  placeholder="Detailed press release article body..."
+                  value={newNews.content}
+                  onChange={(e) => setNewNews({ ...newNews, content: e.target.value })}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
+                ></textarea>
+              </div>
+
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="publishNewsNow"
+                  checked={newNews.publishNow}
+                  onChange={(e) => setNewNews({ ...newNews, publishNow: e.target.checked })}
+                  className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
+                />
+                <label htmlFor="publishNewsNow" className="text-gray-700 text-xs font-bold cursor-pointer">
+                  Publish immediately to public landing page
+                </label>
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setShowNewsModal(false)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={creatingNews}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
+                >
+                  {creatingNews ? 'Publishing...' : 'Publish Article'}
                 </button>
               </div>
             </form>

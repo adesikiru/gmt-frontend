@@ -38,6 +38,10 @@ export const api = {
     login: (body: unknown) =>
       request('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
     me: (token: string) => authRequest('/api/v1/auth/me', token),
+    updateProfile: (token: string, body: unknown) =>
+      authRequest('/api/v1/auth/profile', token, { method: 'PATCH', body: JSON.stringify(body) }),
+    updatePassword: (token: string, body: unknown) =>
+      authRequest('/api/v1/auth/password', token, { method: 'PATCH', body: JSON.stringify(body) }),
   },
   organization: {
     states: () => request('/api/v1/states'),
@@ -99,6 +103,12 @@ export const api = {
   news: {
     list: (stateId?: string) => request(`/api/v1/news${stateId ? `?stateId=${stateId}` : ''}`),
     get: (slug: string) => request(`/api/v1/news/${slug}`),
+    create: (token: string, body: unknown) =>
+      authRequest('/api/v1/news', token, { method: 'POST', body: JSON.stringify(body) }),
+    publish: (token: string, id: string) =>
+      authRequest(`/api/v1/news/${id}/publish`, token, { method: 'PATCH' }),
+    delete: (token: string, id: string) =>
+      authRequest(`/api/v1/news/${id}`, token, { method: 'DELETE' }),
   },
   announcements: {
     list: (token: string) => authRequest('/api/v1/announcements', token),

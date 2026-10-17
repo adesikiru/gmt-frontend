@@ -32,62 +32,35 @@ export default function Home() {
   // Mobile menu
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Live events from API
-  const [events, setEvents] = useState<ApiEvent[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(true);
-
-  useEffect(() => {
-    api.events.list().then((res) => {
-      if (res.success && Array.isArray(res.data)) {
-        setEvents(res.data as ApiEvent[]);
-      }
-      setEventsLoading(false);
-    }).catch(() => setEventsLoading(false));
-  }, []);
-
-  const mediaItems = [
+  // Curated baseline data
+  const defaultEvents: ApiEvent[] = [
     {
-      tag: 'Press Release',
-      title: 'GMT Ogun State Digital Grassroots Portal Officially Unveiled',
-      date: 'October 2026',
-      readTime: '3 min read',
-      summary: 'Grassroots Movement for Tinubu activates full digital membership registration across all 20 LGAs and 236 Wards in Ogun State.',
-      categoryColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      icon: (
-        <svg className="w-6 h-6 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z" />
-        </svg>
-      ),
+      id: 'evt-1',
+      title: 'Ogun Central Grassroots Leadership Townhall',
+      description: 'Strategic gathering of ward mobilizers and grassroots executives to discuss development initiatives and community empowerment.',
+      location: 'June 12 Cultural Centre, Kuto, Abeokuta',
+      startDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'PUBLISHED',
     },
     {
-      tag: 'Community News',
-      title: 'Youth & Women Empowerment Tour Concludes in Abeokuta',
-      date: 'November 2026',
-      readTime: '4 min read',
-      summary: 'Over 1,200 micro-entrepreneurs received digital tools, vocational equipment, and business startup grants under the GMT umbrella.',
-      categoryColor: 'bg-green-50 text-green-700 border-green-200',
-      icon: (
-        <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-        </svg>
-      ),
+      title: 'Ward Coordinators Digital Verification Workshop',
+      id: 'evt-2',
+      description: 'Training ward administrators on verifying voter records and member polling unit validations.',
+      location: 'Ijebu-Ode Town Hall, Ijebu-Ode',
+      startDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'PUBLISHED',
     },
     {
-      tag: 'Voter Education',
-      title: 'Ward-by-Ward Voter Sensitization & Verification Drive',
-      date: 'December 2026',
-      readTime: '2 min read',
-      summary: 'Ensuring all citizens confirm their 20-digit Voter Identification Numbers (VIN) and polling units ahead of upcoming elections.',
-      categoryColor: 'bg-teal-50 text-teal-700 border-teal-200',
-      icon: (
-        <svg className="w-6 h-6 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
+      title: 'Grassroots Farmers & SME Cooperative Forum',
+      id: 'evt-3',
+      description: 'Distribution of agricultural inputs, fertilizer vouchers, and SME seed grants to rural cooperative members.',
+      location: 'Sango-Ota Community Centre, Ota',
+      startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      status: 'PUBLISHED',
     },
   ];
 
-  const empowerments = [
+  const defaultEmpowerments = [
     {
       title: 'Youth Tech & Digital Skills Initiative',
       desc: 'Providing subsidized laptops, coding training, and internet stipends for 2,000 youth across Ogun State wards.',
@@ -113,6 +86,76 @@ export default function Home() {
       stat: '10,000 Beneficiaries',
     },
   ];
+
+  const defaultMediaItems = [
+    {
+      tag: 'Press Release',
+      title: 'GMT Ogun State Digital Grassroots Portal Officially Unveiled',
+      date: 'October 2026',
+      readTime: '3 min read',
+      summary: 'Grassroots Movement for Tinubu activates full digital membership registration across all 20 LGAs and 236 Wards in Ogun State.',
+      categoryColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    },
+    {
+      tag: 'Community News',
+      title: 'Youth & Women Empowerment Tour Concludes in Abeokuta',
+      date: 'November 2026',
+      readTime: '4 min read',
+      summary: 'Over 1,200 micro-entrepreneurs received digital tools, vocational equipment, and business startup grants under the GMT umbrella.',
+      categoryColor: 'bg-green-50 text-green-700 border-green-200',
+    },
+    {
+      tag: 'Voter Education',
+      title: 'Ward-by-Ward Voter Sensitization & Verification Drive',
+      date: 'December 2026',
+      readTime: '2 min read',
+      summary: 'Ensuring all citizens confirm their 20-digit Voter Identification Numbers (VIN) and polling units ahead of upcoming elections.',
+      categoryColor: 'bg-teal-50 text-teal-700 border-teal-200',
+    },
+  ];
+
+  // Live state with fallbacks
+  const [events, setEvents] = useState<ApiEvent[]>(defaultEvents);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [empowermentList, setEmpowermentList] = useState(defaultEmpowerments);
+  const [newsList, setNewsList] = useState(defaultMediaItems);
+
+  useEffect(() => {
+    // 1. Fetch live events
+    api.events.list().then((res) => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        setEvents(res.data as ApiEvent[]);
+      }
+    }).catch(() => {});
+
+    // 2. Fetch live empowerments
+    api.empowerments.list().then((res) => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const live = (res.data as Array<{ title: string; description: string; icon?: string; statOrBudget?: string }>).map((item) => ({
+          title: item.title,
+          desc: item.description,
+          icon: item.icon || '🤝',
+          stat: item.statOrBudget || 'Statewide',
+        }));
+        setEmpowermentList(live);
+      }
+    }).catch(() => {});
+
+    // 3. Fetch live news / press releases
+    api.news.list().then((res) => {
+      if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        const live = (res.data as Array<{ title: string; excerpt?: string; content: string; publishedAt?: string }>).map((item) => ({
+          tag: 'Official Press',
+          title: item.title,
+          date: item.publishedAt ? new Date(item.publishedAt).toLocaleDateString('en-NG', { month: 'short', year: 'numeric' }) : 'October 2026',
+          readTime: '3 min read',
+          summary: item.excerpt || item.content.slice(0, 140) + '...',
+          categoryColor: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+        }));
+        setNewsList(live);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Close menu on resize to desktop
   useEffect(() => {
@@ -477,10 +520,10 @@ export default function Home() {
                       <div className="text-xs text-gray-500 mb-4">📍 {evt.location}</div>
                     )}
                     <Link
-                      href={isLoggedIn ? '/dashboard' : '/register'}
+                      href={isLoggedIn ? '/dashboard/events' : '/register'}
                       className="block text-center bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 font-semibold text-sm py-2.5 rounded-xl transition-colors"
                     >
-                      {isLoggedIn ? 'RSVP in Dashboard' : 'Register to Join'}
+                      {isLoggedIn ? 'RSVP to Attend' : 'Register to Join'}
                     </Link>
                   </div>
                 </div>
@@ -506,7 +549,7 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {empowerments.map((item, idx) => (
+            {empowermentList.map((item, idx) => (
               <div
                 key={idx}
                 className="bg-gradient-to-b from-white to-emerald-50/40 p-6 rounded-2xl border border-emerald-100 hover:border-emerald-300 transition-all flex flex-col justify-between"
@@ -547,7 +590,7 @@ export default function Home() {
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {mediaItems.map((item, idx) => (
+            {newsList.map((item, idx) => (
               <article
                 key={idx}
                 className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
@@ -559,8 +602,8 @@ export default function Home() {
                     </span>
                     <span className="text-xs text-gray-400 font-medium">{item.date}</span>
                   </div>
-                  <div className="mb-4 p-3 bg-emerald-50 rounded-xl inline-block">
-                    {item.icon}
+                  <div className="mb-4 p-3 bg-emerald-50 rounded-xl inline-block text-emerald-700 font-bold">
+                    📰
                   </div>
                   <h3 className="text-xl font-bold text-gray-900 mb-3 hover:text-emerald-600 transition-colors cursor-pointer">
                     {item.title}
@@ -571,7 +614,7 @@ export default function Home() {
                 </div>
                 <div className="px-7 py-4 bg-gray-50/70 border-t border-gray-100 flex items-center justify-between text-xs">
                   <span className="text-gray-500 font-medium">{item.readTime}</span>
-                  <Link href="/register" className="text-emerald-700 font-bold hover:underline">
+                  <Link href={isLoggedIn ? "/dashboard" : "/register"} className="text-emerald-700 font-bold hover:underline">
                     Read Story &rarr;
                   </Link>
                 </div>

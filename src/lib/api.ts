@@ -1,5 +1,4 @@
 import { ENV } from './environment';
-const API_URL = ENV.apiUrl;
 
 export interface ApiResponse<T = unknown> {
   success: boolean;

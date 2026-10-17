@@ -17,48 +17,50 @@ interface ApiEvent {
 }
 
 function formatEventDate(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleDateString('en-NG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric' });
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('en-NG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Africa/Lagos' });
+  } catch {
+    return dateStr;
+  }
 }
 
 function formatEventTime(dateStr: string) {
-  const d = new Date(dateStr);
-  return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true }) + ' WAT';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' }) + ' WAT';
+  } catch {
+    return '';
+  }
 }
 
-export default function Home() {
-  const { isLoggedIn, logout, user, loading } = useAuth();
-
-  // Mobile menu
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  // Curated baseline data
-  const defaultEvents: ApiEvent[] = [
-    {
-      id: 'evt-1',
-      title: 'Ogun Central Grassroots Leadership Townhall',
-      description: 'Strategic gathering of ward mobilizers and grassroots executives to discuss development initiatives and community empowerment.',
-      location: 'June 12 Cultural Centre, Kuto, Abeokuta',
-      startDate: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'PUBLISHED',
-    },
-    {
-      title: 'Ward Coordinators Digital Verification Workshop',
-      id: 'evt-2',
-      description: 'Training ward administrators on verifying voter records and member polling unit validations.',
-      location: 'Ijebu-Ode Town Hall, Ijebu-Ode',
-      startDate: new Date(Date.now() + 21 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'PUBLISHED',
-    },
-    {
-      title: 'Grassroots Farmers & SME Cooperative Forum',
-      id: 'evt-3',
-      description: 'Distribution of agricultural inputs, fertilizer vouchers, and SME seed grants to rural cooperative members.',
-      location: 'Sango-Ota Community Centre, Ota',
-      startDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      status: 'PUBLISHED',
-    },
-  ];
+// Curated baseline data
+const defaultEvents: ApiEvent[] = [
+  {
+    id: 'evt-1',
+    title: 'Ogun Central Grassroots Leadership Townhall',
+    description: 'Strategic gathering of ward mobilizers and grassroots executives to discuss development initiatives and community empowerment.',
+    location: 'June 12 Cultural Centre, Kuto, Abeokuta',
+    startDate: '2026-11-14T09:00:00.000Z',
+    status: 'PUBLISHED',
+  },
+  {
+    title: 'Ward Coordinators Digital Verification Workshop',
+    id: 'evt-2',
+    description: 'Training ward administrators on verifying voter records and member polling unit validations.',
+    location: 'Ijebu-Ode Town Hall, Ijebu-Ode',
+    startDate: '2026-11-21T10:00:00.000Z',
+    status: 'PUBLISHED',
+  },
+  {
+    title: 'Grassroots Farmers & SME Cooperative Forum',
+    id: 'evt-3',
+    description: 'Distribution of agricultural inputs, fertilizer vouchers, and SME seed grants to rural cooperative members.',
+    location: 'Sango-Ota Community Centre, Ota',
+    startDate: '2026-11-30T08:30:00.000Z',
+    status: 'PUBLISHED',
+  },
+];
 
   const defaultEmpowerments = [
     {
@@ -114,6 +116,12 @@ export default function Home() {
     },
   ];
 
+export default function Home() {
+  const { isLoggedIn, logout, user, loading } = useAuth();
+
+  // Mobile menu
+  const [menuOpen, setMenuOpen] = useState(false);
+
   // Live state with fallbacks
   const [events, setEvents] = useState<ApiEvent[]>(defaultEvents);
   const [eventsLoading, setEventsLoading] = useState(false);
@@ -126,7 +134,7 @@ export default function Home() {
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setEvents(res.data as ApiEvent[]);
       }
-    }).catch(() => {});
+    }).catch(() => {}).finally(() => setEventsLoading(false));
 
     // 2. Fetch live empowerments
     api.empowerments.list().then((res) => {
@@ -421,7 +429,7 @@ export default function Home() {
               A Movement Built From the Ground Up
             </h2>
             <p className="text-gray-600 leading-relaxed">
-              GMT is a structured, technology-powered political mobilization platform designed to organize citizens at every level of Nigeria's democratic structure — from the smallest polling unit to the national assembly.
+              GMT is a structured, technology-powered political mobilization platform designed to organize citizens at every level of Nigeria&apos;s democratic structure — from the smallest polling unit to the national assembly.
             </p>
           </div>
 
@@ -432,7 +440,7 @@ export default function Home() {
               </div>
               <h3 className="text-xl font-bold text-gray-900 mb-3">Digital Membership Registry</h3>
               <p className="text-gray-600 text-sm leading-relaxed">
-                Every member is uniquely identified from their polling unit through biometric data, NIN, and voter card records — creating Nigeria's first verified grassroots digital registry.
+                Every member is uniquely identified from their polling unit through biometric data, NIN, and voter card records — creating Nigeria&apos;s first verified grassroots digital registry.
               </p>
             </div>
 

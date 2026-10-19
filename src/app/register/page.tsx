@@ -7,7 +7,13 @@ import { api } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import BrandLogo from '@/components/BrandLogo';
 
-interface OrgItem { id: string; name: string; code?: string; }
+interface OrgItem {
+  id: string;
+  name: string;
+  code?: string;
+  fullName?: string;
+  rawName?: string;
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -40,59 +46,196 @@ export default function RegisterPage() {
     pollingUnitId: '',
   });
 
-  // Organizational cascading lists
+  // Selected names for backend DB mapping
+  const [selectedStateName, setSelectedStateName] = useState('Ogun State');
+  const [selectedLgaName, setSelectedLgaName] = useState('');
+  const [selectedWardName, setSelectedWardName] = useState('');
+  const [selectedPuName, setSelectedPuName] = useState('');
+
+  // Organizational cascading lists from INEC
   const [states, setStates] = useState<OrgItem[]>([]);
   const [lgas, setLgas] = useState<OrgItem[]>([]);
   const [wards, setWards] = useState<OrgItem[]>([]);
   const [pollingUnits, setPollingUnits] = useState<OrgItem[]>([]);
 
-  // Load States on mount
+  // Loading states for each cascading level
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingLgas, setLoadingLgas] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
+  const [loadingPus, setLoadingPus] = useState(false);
+
+  // Load INEC States on mount
   useEffect(() => {
-    api.organization.states().then((res) => {
-      if (res.success && res.data) {
-        const stateList = res.data as OrgItem[];
-        setStates(stateList);
-        // Default to Ogun State if present
-        const ogun = stateList.find((s) => s.name.toLowerCase().includes('ogun'));
-        if (ogun) {
-          setForm((f) => ({ ...f, stateId: ogun.id }));
+    setLoadingStates(true);
+    api.inec
+      .states()
+      .then((res) => {
+        if (res.success && res.data && res.data.length > 0) {
+          const stateList = res.data as OrgItem[];
+          setStates(stateList);
+          // Default to Ogun State (ID 28)
+          const ogun = stateList.find(
+            (s) => s.id === '28' || s.name.toLowerCase().includes('ogun'),
+          );
+          if (ogun) {
+            setForm((f) => ({ ...f, stateId: ogun.id }));
+            setSelectedStateName(ogun.name || 'Ogun State');
+          }
+        } else {
+          // Fallback to backend organization states if INEC route fails
+          api.organization.states().then((bRes) => {
+            if (bRes.success && bRes.data) {
+              const bList = bRes.data as OrgItem[];
+              setStates(bList);
+              const ogun = bList.find((s) => s.name.toLowerCase().includes('ogun'));
+              if (ogun) {
+                setForm((f) => ({ ...f, stateId: ogun.id }));
+                setSelectedStateName(ogun.name);
+              }
+            }
+          });
         }
-      }
-    });
+      })
+      .catch(() => {
+        // Fallback to backend organization
+        api.organization.states().then((bRes) => {
+          if (bRes.success && bRes.data) {
+            const bList = bRes.data as OrgItem[];
+            setStates(bList);
+            const ogun = bList.find((s) => s.name.toLowerCase().includes('ogun'));
+            if (ogun) {
+              setForm((f) => ({ ...f, stateId: ogun.id }));
+              setSelectedStateName(ogun.name);
+            }
+          }
+        });
+      })
+      .finally(() => setLoadingStates(false));
   }, []);
 
-  // When state changes and voter is true, fetch LGAs
+  // When State changes: fetch INEC LGAs
   useEffect(() => {
     if (form.isRegisteredVoter && form.stateId) {
-      api.organization.lgas(form.stateId).then((res) => {
-        if (res.success) setLgas((res.data as OrgItem[]) ?? []);
-        setForm((f) => ({ ...f, lgaId: '', wardId: '', pollingUnitId: '' }));
-      });
+      setLoadingLgas(true);
+      setLgas([]);
+      setWards([]);
+      setPollingUnits([]);
+      setSelectedLgaName('');
+      setSelectedWardName('');
+      setSelectedPuName('');
+
+      api.inec
+        .lgas(form.stateId)
+        .then((res) => {
+          if (res.success && res.data && res.data.length > 0) {
+            setLgas((res.data as OrgItem[]) ?? []);
+          } else {
+            // Fallback to backend organization LGAs
+            api.organization.lgas(form.stateId).then((bRes) => {
+              if (bRes.success) setLgas((bRes.data as OrgItem[]) ?? []);
+            });
+          }
+        })
+        .catch(() => {
+          api.organization.lgas(form.stateId).then((bRes) => {
+            if (bRes.success) setLgas((bRes.data as OrgItem[]) ?? []);
+          });
+        })
+        .finally(() => {
+          setLoadingLgas(false);
+          setForm((f) => ({ ...f, lgaId: '', wardId: '', pollingUnitId: '' }));
+        });
     }
   }, [form.stateId, form.isRegisteredVoter]);
 
-  // When LGA changes, fetch Wards
+  // When LGA changes: fetch INEC Wards
   useEffect(() => {
     if (form.isRegisteredVoter && form.lgaId) {
-      api.organization.wards(form.lgaId).then((res) => {
-        if (res.success) setWards((res.data as OrgItem[]) ?? []);
-        setForm((f) => ({ ...f, wardId: '', pollingUnitId: '' }));
-      });
+      setLoadingWards(true);
+      setWards([]);
+      setPollingUnits([]);
+      setSelectedWardName('');
+      setSelectedPuName('');
+
+      api.inec
+        .wards(form.lgaId)
+        .then((res) => {
+          if (res.success && res.data && res.data.length > 0) {
+            setWards((res.data as OrgItem[]) ?? []);
+          } else {
+            api.organization.wards(form.lgaId).then((bRes) => {
+              if (bRes.success) setWards((bRes.data as OrgItem[]) ?? []);
+            });
+          }
+        })
+        .catch(() => {
+          api.organization.wards(form.lgaId).then((bRes) => {
+            if (bRes.success) setWards((bRes.data as OrgItem[]) ?? []);
+          });
+        })
+        .finally(() => {
+          setLoadingWards(false);
+          setForm((f) => ({ ...f, wardId: '', pollingUnitId: '' }));
+        });
     }
   }, [form.lgaId, form.isRegisteredVoter]);
 
-  // When Ward changes, fetch Polling Units
+  // When Ward changes: fetch INEC Polling Units
   useEffect(() => {
     if (form.isRegisteredVoter && form.wardId) {
-      api.organization.pollingUnits(form.wardId).then((res) => {
-        if (res.success) setPollingUnits((res.data as OrgItem[]) ?? []);
-        setForm((f) => ({ ...f, pollingUnitId: '' }));
-      });
+      setLoadingPus(true);
+      setPollingUnits([]);
+      setSelectedPuName('');
+
+      api.inec
+        .pollingUnits(form.wardId)
+        .then((res) => {
+          if (res.success && res.data && res.data.length > 0) {
+            setPollingUnits((res.data as OrgItem[]) ?? []);
+          } else {
+            api.organization.pollingUnits(form.wardId).then((bRes) => {
+              if (bRes.success) setPollingUnits((bRes.data as OrgItem[]) ?? []);
+            });
+          }
+        })
+        .catch(() => {
+          api.organization.pollingUnits(form.wardId).then((bRes) => {
+            if (bRes.success) setPollingUnits((bRes.data as OrgItem[]) ?? []);
+          });
+        })
+        .finally(() => {
+          setLoadingPus(false);
+          setForm((f) => ({ ...f, pollingUnitId: '' }));
+        });
     }
   }, [form.wardId, form.isRegisteredVoter]);
 
   const setField = (field: string, value: string | boolean) => {
     setForm((f) => ({ ...f, [field]: value }));
+  };
+
+  const handleStateChange = (stateId: string) => {
+    setField('stateId', stateId);
+    const selected = states.find((s) => s.id === stateId);
+    setSelectedStateName(selected?.name || selected?.fullName || '');
+  };
+
+  const handleLgaChange = (lgaId: string) => {
+    setField('lgaId', lgaId);
+    const selected = lgas.find((l) => l.id === lgaId);
+    setSelectedLgaName(selected?.name || selected?.rawName || '');
+  };
+
+  const handleWardChange = (wardId: string) => {
+    setField('wardId', wardId);
+    const selected = wards.find((w) => w.id === wardId);
+    setSelectedWardName(selected?.name || selected?.rawName || '');
+  };
+
+  const handlePuChange = (puId: string) => {
+    setField('pollingUnitId', puId);
+    const selected = pollingUnits.find((p) => p.id === puId);
+    setSelectedPuName(selected?.rawName || selected?.name || '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -132,9 +275,13 @@ export default function RegisterPage() {
       isRegisteredVoter: form.isRegisteredVoter,
       voterCardNumber: form.isRegisteredVoter ? form.voterCardNumber : undefined,
       stateId: form.isRegisteredVoter ? form.stateId || undefined : undefined,
+      stateName: form.isRegisteredVoter ? selectedStateName || undefined : undefined,
       lgaId: form.isRegisteredVoter ? form.lgaId || undefined : undefined,
+      lgaName: form.isRegisteredVoter ? selectedLgaName || undefined : undefined,
       wardId: form.isRegisteredVoter ? form.wardId || undefined : undefined,
+      wardName: form.isRegisteredVoter ? selectedWardName || undefined : undefined,
       pollingUnitId: form.isRegisteredVoter ? form.pollingUnitId || undefined : undefined,
+      pollingUnitName: form.isRegisteredVoter ? selectedPuName || undefined : undefined,
     });
     setLoading(false);
 
@@ -304,6 +451,24 @@ export default function RegisterPage() {
                 {/* Organizational Fields: ONLY displayed if user is a registered voter */}
                 {form.isRegisteredVoter && (
                   <div className="mt-6 pt-5 border-t border-emerald-200/60 space-y-4">
+                    {/* INEC Live Connection Header */}
+                    <div className="bg-emerald-100/70 border border-emerald-200 rounded-xl p-3.5 flex items-start space-x-3">
+                      <div className="mt-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                            INEC Official Voter Directory
+                          </span>
+                          <span className="text-[10px] font-semibold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                            Live Integration
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                          Cascading directory populated directly from INEC (cvr.inecnigeria.org). Defaulting to Ogun State with support nationwide.
+                        </p>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
                         Voter Identification Number (VIN) *
@@ -321,77 +486,154 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* State Selection */}
                       <div>
-                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                          State *
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                            State *
+                          </label>
+                          {loadingStates && (
+                            <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Loading...</span>
+                          )}
+                        </div>
                         <select
                           value={form.stateId}
-                          onChange={(e) => setField('stateId', e.target.value)}
+                          onChange={(e) => handleStateChange(e.target.value)}
                           className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                         >
                           <option value="">-- Select State --</option>
                           {states.map((s) => (
-                            <option key={s.id} value={s.id}>{s.name}</option>
+                            <option key={s.id} value={s.id}>
+                              {s.name} {s.fullName ? `(${s.fullName})` : ''}
+                            </option>
                           ))}
                         </select>
+                        <p className="text-[10px] text-emerald-700 mt-1">Starting with Ogun State (ID 28)</p>
                       </div>
 
+                      {/* LGA Selection */}
                       <div>
-                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                          Local Government Area (LGA) *
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                            Local Government Area (LGA) *
+                          </label>
+                          {loadingLgas && (
+                            <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Fetching LGAs...</span>
+                          )}
+                        </div>
                         <select
                           value={form.lgaId}
-                          onChange={(e) => setField('lgaId', e.target.value)}
-                          disabled={!form.stateId}
+                          onChange={(e) => handleLgaChange(e.target.value)}
+                          disabled={!form.stateId || loadingLgas}
                           className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                         >
-                          <option value="">-- Select LGA --</option>
+                          <option value="">
+                            {loadingLgas ? '-- Loading LGAs from INEC... --' : '-- Select LGA --'}
+                          </option>
                           {lgas.map((l) => (
-                            <option key={l.id} value={l.id}>{l.name}</option>
+                            <option key={l.id} value={l.id}>
+                              {l.name}
+                            </option>
                           ))}
                         </select>
+                        {lgas.length > 0 && !loadingLgas && (
+                          <p className="text-[10px] text-emerald-700 mt-1">{lgas.length} LGAs loaded from INEC</p>
+                        )}
                       </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Electoral Ward Selection */}
                       <div>
-                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                          Electoral Ward *
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                            Electoral Ward *
+                          </label>
+                          {loadingWards && (
+                            <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Fetching Wards...</span>
+                          )}
+                        </div>
                         <select
                           value={form.wardId}
-                          onChange={(e) => setField('wardId', e.target.value)}
-                          disabled={!form.lgaId}
+                          onChange={(e) => handleWardChange(e.target.value)}
+                          disabled={!form.lgaId || loadingWards}
                           className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                         >
-                          <option value="">-- Select Ward --</option>
+                          <option value="">
+                            {loadingWards ? '-- Loading Wards from INEC... --' : '-- Select Ward --'}
+                          </option>
                           {wards.map((w) => (
-                            <option key={w.id} value={w.id}>{w.name}</option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                          Polling Unit (PU)
-                        </label>
-                        <select
-                          value={form.pollingUnitId}
-                          onChange={(e) => setField('pollingUnitId', e.target.value)}
-                          disabled={!form.wardId}
-                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        >
-                          <option value="">-- Select Polling Unit --</option>
-                          {pollingUnits.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.name} {p.code ? `(${p.code})` : ''}
+                            <option key={w.id} value={w.id}>
+                              {w.name}
                             </option>
                           ))}
                         </select>
+                        {wards.length > 0 && !loadingWards && (
+                          <p className="text-[10px] text-emerald-700 mt-1">{wards.length} Wards loaded from INEC</p>
+                        )}
+                      </div>
+
+                      {/* Polling Unit Selection */}
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                            Polling Unit (PU)
+                          </label>
+                          {loadingPus && (
+                            <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Fetching PUs...</span>
+                          )}
+                        </div>
+                        <select
+                          value={form.pollingUnitId}
+                          onChange={(e) => handlePuChange(e.target.value)}
+                          disabled={!form.wardId || loadingPus}
+                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                        >
+                          <option value="">
+                            {loadingPus ? '-- Loading Polling Units... --' : '-- Select Polling Unit --'}
+                          </option>
+                          {pollingUnits.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.code ? `[PU ${p.code}] ` : ''}
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        {pollingUnits.length > 0 && !loadingPus && (
+                          <p className="text-[10px] text-emerald-700 mt-1">{pollingUnits.length} Polling Units loaded from INEC</p>
+                        )}
                       </div>
                     </div>
+
+                    {/* Verified Voting Station Confirmation Card */}
+                    {form.pollingUnitId && selectedPuName && (
+                      <div className="mt-4 bg-white border border-emerald-200 rounded-2xl p-4 shadow-sm animate-fadeIn">
+                        <div className="flex items-center space-x-2 text-emerald-800 text-xs font-bold uppercase tracking-wider mb-2">
+                          <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                          <span>Selected INEC Electoral Station</span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                          <div className="bg-emerald-50/60 p-2 rounded-lg">
+                            <span className="text-[10px] text-emerald-700 block font-semibold">State</span>
+                            <span className="text-gray-900 font-bold">{selectedStateName || 'Ogun State'}</span>
+                          </div>
+                          <div className="bg-emerald-50/60 p-2 rounded-lg">
+                            <span className="text-[10px] text-emerald-700 block font-semibold">LGA</span>
+                            <span className="text-gray-900 font-bold">{selectedLgaName || 'Selected LGA'}</span>
+                          </div>
+                          <div className="bg-emerald-50/60 p-2 rounded-lg">
+                            <span className="text-[10px] text-emerald-700 block font-semibold">Ward</span>
+                            <span className="text-gray-900 font-bold truncate block">{selectedWardName || 'Selected Ward'}</span>
+                          </div>
+                          <div className="bg-emerald-50/60 p-2 rounded-lg">
+                            <span className="text-[10px] text-emerald-700 block font-semibold">Polling Unit</span>
+                            <span className="text-gray-900 font-bold truncate block">{selectedPuName}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

@@ -48,6 +48,24 @@ export const api = {
     wards: (lgaId?: string) => request(`/api/v1/wards${lgaId ? `?lgaId=${lgaId}` : ''}`),
     pollingUnits: (wardId?: string) => request(`/api/v1/polling-units${wardId ? `?wardId=${wardId}` : ''}`),
   },
+  inec: {
+    states: async () => {
+      const res = await fetch('/api/inec/states');
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; fullName: string; code?: string }>>>;
+    },
+    lgas: async (stateId: string) => {
+      const res = await fetch(`/api/inec/lgas?stateId=${encodeURIComponent(stateId)}`);
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>>>;
+    },
+    wards: async (lgaId: string) => {
+      const res = await fetch(`/api/inec/wards?lgaId=${encodeURIComponent(lgaId)}`);
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>>>;
+    },
+    pollingUnits: async (wardId: string) => {
+      const res = await fetch(`/api/inec/polling-units?wardId=${encodeURIComponent(wardId)}`);
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>>>;
+    },
+  },
   membership: {
     my: (token: string) => authRequest('/api/v1/my-membership', token),
     list: (token: string, params?: Record<string, string>) => {

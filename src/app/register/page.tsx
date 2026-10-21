@@ -64,6 +64,11 @@ export default function RegisterPage() {
   const [loadingWards, setLoadingWards] = useState(false);
   const [loadingPus, setLoadingPus] = useState(false);
 
+  // INEC portal maintenance mode — when true, wards & PUs use free-text inputs
+  const [inecMaintenance, setInecMaintenance] = useState(false);
+  const [wardText, setWardText] = useState('');
+  const [puText, setPuText] = useState('');
+
   // Load INEC States on mount
   useEffect(() => {
     setLoadingStates(true);
@@ -156,21 +161,30 @@ export default function RegisterPage() {
       setPollingUnits([]);
       setSelectedWardName('');
       setSelectedPuName('');
+      setWardText('');
+      setPuText('');
 
       api.inec
         .wards(form.lgaId)
         .then((res) => {
-          if (res.success && res.data && res.data.length > 0) {
+          if (res.maintenanceMode) {
+            // INEC portal is under maintenance — switch to free-text mode
+            setInecMaintenance(true);
+          } else if (res.success && res.data && res.data.length > 0) {
+            setInecMaintenance(false);
             setWards((res.data as OrgItem[]) ?? []);
           } else {
+            // Try backend org wards as last fallback
             api.organization.wards(form.lgaId).then((bRes) => {
               if (bRes.success) setWards((bRes.data as OrgItem[]) ?? []);
+              else setInecMaintenance(true);
             });
           }
         })
         .catch(() => {
           api.organization.wards(form.lgaId).then((bRes) => {
             if (bRes.success) setWards((bRes.data as OrgItem[]) ?? []);
+            else setInecMaintenance(true);
           });
         })
         .finally(() => {
@@ -182,15 +196,18 @@ export default function RegisterPage() {
 
   // When Ward changes: fetch INEC Polling Units
   useEffect(() => {
-    if (form.isRegisteredVoter && form.wardId) {
+    if (form.isRegisteredVoter && form.wardId && !inecMaintenance) {
       setLoadingPus(true);
       setPollingUnits([]);
       setSelectedPuName('');
+      setPuText('');
 
       api.inec
         .pollingUnits(form.wardId)
         .then((res) => {
-          if (res.success && res.data && res.data.length > 0) {
+          if (res.maintenanceMode) {
+            setInecMaintenance(true);
+          } else if (res.success && res.data && res.data.length > 0) {
             setPollingUnits((res.data as OrgItem[]) ?? []);
           } else {
             api.organization.pollingUnits(form.wardId).then((bRes) => {
@@ -208,7 +225,7 @@ export default function RegisterPage() {
           setForm((f) => ({ ...f, pollingUnitId: '' }));
         });
     }
-  }, [form.wardId, form.isRegisteredVoter]);
+  }, [form.wardId, form.isRegisteredVoter, inecMaintenance]);
 
   const setField = (field: string, value: string | boolean) => {
     setForm((f) => ({ ...f, [field]: value }));
@@ -232,10 +249,23 @@ export default function RegisterPage() {
     setSelectedWardName(selected?.name || selected?.rawName || '');
   };
 
+  const handleWardTextChange = (text: string) => {
+    setWardText(text);
+    setSelectedWardName(text);
+    // Use the text itself as a pseudo-id so validation passes
+    setField('wardId', text ? 'MANUAL' : '');
+  };
+
   const handlePuChange = (puId: string) => {
     setField('pollingUnitId', puId);
     const selected = pollingUnits.find((p) => p.id === puId);
     setSelectedPuName(selected?.rawName || selected?.name || '');
+  };
+
+  const handlePuTextChange = (text: string) => {
+    setPuText(text);
+    setSelectedPuName(text);
+    setField('pollingUnitId', text ? 'MANUAL' : '');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -451,23 +481,42 @@ export default function RegisterPage() {
                 {/* Organizational Fields: ONLY displayed if user is a registered voter */}
                 {form.isRegisteredVoter && (
                   <div className="mt-6 pt-5 border-t border-emerald-200/60 space-y-4">
-                    {/* INEC Live Connection Header */}
-                    <div className="bg-emerald-100/70 border border-emerald-200 rounded-xl p-3.5 flex items-start space-x-3">
-                      <div className="mt-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
-                            INEC Official Voter Directory
-                          </span>
-                          <span className="text-[10px] font-semibold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
-                            Live Integration
-                          </span>
+                    {/* INEC Status Banner */}
+                    {inecMaintenance ? (
+                      <div className="bg-amber-50 border border-amber-300 rounded-xl p-3.5 flex items-start space-x-3">
+                        <div className="mt-0.5 w-2.5 h-2.5 rounded-full bg-amber-400 flex-shrink-0" />
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                              INEC Directory — Maintenance Mode
+                            </span>
+                            <span className="text-[10px] font-semibold bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full">
+                              Offline
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                            The INEC portal (cvr.inecnigeria.org) is currently under maintenance. LGAs are loaded from our static database. Please type your Ward and Polling Unit name manually — your data will be verified once INEC is back online.
+                          </p>
                         </div>
-                        <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
-                          Cascading directory populated directly from INEC (cvr.inecnigeria.org). Defaulting to Ogun State with support nationwide.
-                        </p>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="bg-emerald-100/70 border border-emerald-200 rounded-xl p-3.5 flex items-start space-x-3">
+                        <div className="mt-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
+                        <div>
+                          <div className="flex items-center space-x-2">
+                            <span className="text-xs font-bold text-emerald-950 uppercase tracking-wide">
+                              INEC Official Voter Directory
+                            </span>
+                            <span className="text-[10px] font-semibold bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-full">
+                              Live Integration
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-emerald-800 mt-0.5 leading-relaxed">
+                            Cascading directory populated directly from INEC (cvr.inecnigeria.org). Defaulting to Ogun State with support nationwide.
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
@@ -543,7 +592,7 @@ export default function RegisterPage() {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Electoral Ward Selection */}
+                      {/* Electoral Ward — Dropdown (live) or Text Input (maintenance) */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
@@ -553,27 +602,41 @@ export default function RegisterPage() {
                             <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Fetching Wards...</span>
                           )}
                         </div>
-                        <select
-                          value={form.wardId}
-                          onChange={(e) => handleWardChange(e.target.value)}
-                          disabled={!form.lgaId || loadingWards}
-                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        >
-                          <option value="">
-                            {loadingWards ? '-- Loading Wards from INEC... --' : '-- Select Ward --'}
-                          </option>
-                          {wards.map((w) => (
-                            <option key={w.id} value={w.id}>
-                              {w.name}
+                        {inecMaintenance ? (
+                          <input
+                            type="text"
+                            value={wardText}
+                            onChange={(e) => handleWardTextChange(e.target.value)}
+                            placeholder="Type your ward name (e.g. Odeda Ward 1)"
+                            disabled={!form.lgaId}
+                            className="w-full px-3.5 py-2.5 border border-amber-300 rounded-xl bg-amber-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                          />
+                        ) : (
+                          <select
+                            value={form.wardId}
+                            onChange={(e) => handleWardChange(e.target.value)}
+                            disabled={!form.lgaId || loadingWards}
+                            className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                          >
+                            <option value="">
+                              {loadingWards ? '-- Loading Wards from INEC... --' : '-- Select Ward --'}
                             </option>
-                          ))}
-                        </select>
-                        {wards.length > 0 && !loadingWards && (
+                            {wards.map((w) => (
+                              <option key={w.id} value={w.id}>
+                                {w.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {wards.length > 0 && !loadingWards && !inecMaintenance && (
                           <p className="text-[10px] text-emerald-700 mt-1">{wards.length} Wards loaded from INEC</p>
+                        )}
+                        {inecMaintenance && (
+                          <p className="text-[10px] text-amber-700 mt-1">Type your ward name — INEC is under maintenance</p>
                         )}
                       </div>
 
-                      {/* Polling Unit Selection */}
+                      {/* Polling Unit — Dropdown (live) or Text Input (maintenance) */}
                       <div>
                         <div className="flex items-center justify-between mb-1">
                           <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
@@ -583,22 +646,36 @@ export default function RegisterPage() {
                             <span className="text-[10px] text-emerald-700 animate-pulse font-medium">Fetching PUs...</span>
                           )}
                         </div>
-                        <select
-                          value={form.pollingUnitId}
-                          onChange={(e) => handlePuChange(e.target.value)}
-                          disabled={!form.wardId || loadingPus}
-                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                        >
-                          <option value="">
-                            {loadingPus ? '-- Loading Polling Units... --' : '-- Select Polling Unit --'}
-                          </option>
-                          {pollingUnits.map((p) => (
-                            <option key={p.id} value={p.id}>
-                              {p.code ? `[PU ${p.code}] ` : ''}
-                              {p.name}
+                        {inecMaintenance ? (
+                          <input
+                            type="text"
+                            value={puText}
+                            onChange={(e) => handlePuTextChange(e.target.value)}
+                            placeholder="Type your polling unit name (optional)"
+                            disabled={!form.lgaId}
+                            className="w-full px-3.5 py-2.5 border border-amber-300 rounded-xl bg-amber-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                          />
+                        ) : (
+                          <select
+                            value={form.pollingUnitId}
+                            onChange={(e) => handlePuChange(e.target.value)}
+                            disabled={!form.wardId || loadingPus}
+                            className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                          >
+                            <option value="">
+                              {loadingPus ? '-- Loading Polling Units... --' : '-- Select Polling Unit --'}
                             </option>
-                          ))}
-                        </select>
+                            {pollingUnits.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.code ? `[PU ${p.code}] ` : ''}
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        {inecMaintenance && (
+                          <p className="text-[10px] text-amber-700 mt-1">Type your polling unit — INEC is under maintenance</p>
+                        )}
                         {pollingUnits.length > 0 && !loadingPus && (
                           <p className="text-[10px] text-emerald-700 mt-1">{pollingUnits.length} Polling Units loaded from INEC</p>
                         )}

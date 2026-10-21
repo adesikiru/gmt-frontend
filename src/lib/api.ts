@@ -5,6 +5,8 @@ export interface ApiResponse<T = unknown> {
   data?: T;
   message?: string;
   errors?: string[];
+  /** True when the INEC portal is under maintenance and returns HTML instead of JSON */
+  maintenanceMode?: boolean;
 }
 
 async function request<T>(
@@ -59,11 +61,11 @@ export const api = {
     },
     wards: async (lgaId: string) => {
       const res = await fetch(`/api/inec/wards?lgaId=${encodeURIComponent(lgaId)}`);
-      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>>>;
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>> & { maintenanceMode?: boolean }>;
     },
     pollingUnits: async (wardId: string) => {
       const res = await fetch(`/api/inec/polling-units?wardId=${encodeURIComponent(wardId)}`);
-      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>>>;
+      return res.json() as Promise<ApiResponse<Array<{ id: string; name: string; code?: string; rawName?: string }>> & { maintenanceMode?: boolean }>;
     },
   },
   membership: {

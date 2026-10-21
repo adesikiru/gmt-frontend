@@ -77,6 +77,11 @@ export default function SettingsPage() {
   const [loadingWards, setLoadingWards] = useState(false);
   const [loadingPus, setLoadingPus] = useState(false);
 
+  // INEC maintenance mode — switch ward/PU to free-text when portal is offline
+  const [inecMaintenance, setInecMaintenance] = useState(false);
+  const [wardText, setWardText] = useState('');
+  const [puText, setPuText] = useState('');
+
   // Password update form state
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -278,6 +283,8 @@ export default function SettingsPage() {
     setSelectedPuName('');
     setWards([]);
     setPollingUnits([]);
+    setWardText('');
+    setPuText('');
 
     const lgaObj = lgas.find((l) => l.id === selectedLgaId);
     setSelectedLgaName(lgaObj?.name || (lgaObj as unknown as { rawName?: string })?.rawName || '');
@@ -286,12 +293,17 @@ export default function SettingsPage() {
       setLoadingWards(true);
       try {
         const res = await api.inec.wards(selectedLgaId);
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res.maintenanceMode) {
+          setInecMaintenance(true);
+        } else if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+          setInecMaintenance(false);
           setWards(res.data as OrgItem[]);
         } else {
           const bRes = await api.organization.wards(selectedLgaId);
           if (bRes.success && Array.isArray(bRes.data)) {
             setWards(bRes.data as OrgItem[]);
+          } else {
+            setInecMaintenance(true);
           }
         }
       } catch {
@@ -299,8 +311,11 @@ export default function SettingsPage() {
           const bRes = await api.organization.wards(selectedLgaId);
           if (bRes.success && Array.isArray(bRes.data)) {
             setWards(bRes.data as OrgItem[]);
+          } else {
+            setInecMaintenance(true);
           }
         } catch {
+          setInecMaintenance(true);
           setWards([]);
         }
       } finally {
@@ -317,15 +332,18 @@ export default function SettingsPage() {
     setPollingUnitId('');
     setSelectedPuName('');
     setPollingUnits([]);
+    setPuText('');
 
     const wardObj = wards.find((w) => w.id === selectedWardId);
     setSelectedWardName(wardObj?.name || (wardObj as unknown as { rawName?: string })?.rawName || '');
 
-    if (selectedWardId) {
+    if (selectedWardId && !inecMaintenance) {
       setLoadingPus(true);
       try {
         const res = await api.inec.pollingUnits(selectedWardId);
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res.maintenanceMode) {
+          setInecMaintenance(true);
+        } else if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           setPollingUnits(res.data as OrgItem[]);
         } else {
           const bRes = await api.organization.pollingUnits(selectedWardId);
@@ -734,7 +752,7 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Ward & Polling Unit Dropdowns */}
+                  {/* Ward & Polling Unit — Dropdown or Free-text based on INEC status */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <div className="flex justify-between items-center mb-1">
@@ -747,25 +765,44 @@ export default function SettingsPage() {
                           </span>
                         )}
                       </div>
-                      <select
-                        value={wardId}
-                        onChange={(e) => handleWardChange(e.target.value)}
-                        disabled={!lgaId || loadingWards}
-                        className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                      >
-                        <option value="">
-                          {loadingWards
-                            ? '⏳ Fetching official Wards from INEC...'
-                            : !lgaId
-                            ? '-- First select an LGA --'
-                            : '-- Select Ward --'}
-                        </option>
-                        {wards.map((w) => (
-                          <option key={w.id} value={w.id}>
-                            {w.name}
+                      {inecMaintenance ? (
+                        <input
+                          type="text"
+                          value={wardText}
+                          onChange={(e) => {
+                            const t = e.target.value;
+                            setWardText(t);
+                            setSelectedWardName(t);
+                            setWardId(t ? 'MANUAL' : '');
+                          }}
+                          placeholder="Type your ward name (e.g. Odeda Ward 1)"
+                          disabled={!lgaId}
+                          className="w-full px-3.5 py-2.5 border border-amber-300 rounded-xl bg-amber-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                        />
+                      ) : (
+                        <select
+                          value={wardId}
+                          onChange={(e) => handleWardChange(e.target.value)}
+                          disabled={!lgaId || loadingWards}
+                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                        >
+                          <option value="">
+                            {loadingWards
+                              ? '⏳ Fetching official Wards from INEC...'
+                              : !lgaId
+                              ? '-- First select an LGA --'
+                              : '-- Select Ward --'}
                           </option>
-                        ))}
-                      </select>
+                          {wards.map((w) => (
+                            <option key={w.id} value={w.id}>
+                              {w.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {inecMaintenance && (
+                        <p className="text-[10px] text-amber-700 mt-1">INEC offline — type your ward name manually</p>
+                      )}
                     </div>
 
                     <div>
@@ -779,25 +816,44 @@ export default function SettingsPage() {
                           </span>
                         )}
                       </div>
-                      <select
-                        value={pollingUnitId}
-                        onChange={(e) => handlePollingUnitChange(e.target.value)}
-                        disabled={!wardId || loadingPus}
-                        className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
-                      >
-                        <option value="">
-                          {loadingPus
-                            ? '⏳ Fetching official Polling Units from INEC...'
-                            : !wardId
-                            ? '-- First select an Electoral Ward --'
-                            : '-- Select Polling Unit --'}
-                        </option>
-                        {pollingUnits.map((pu) => (
-                          <option key={pu.id} value={pu.id}>
-                            {pu.name} {pu.code ? `(${pu.code})` : ''}
+                      {inecMaintenance ? (
+                        <input
+                          type="text"
+                          value={puText}
+                          onChange={(e) => {
+                            const t = e.target.value;
+                            setPuText(t);
+                            setSelectedPuName(t);
+                            setPollingUnitId(t ? 'MANUAL' : '');
+                          }}
+                          placeholder="Type your polling unit name (optional)"
+                          disabled={!lgaId}
+                          className="w-full px-3.5 py-2.5 border border-amber-300 rounded-xl bg-amber-50/50 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400 disabled:opacity-50"
+                        />
+                      ) : (
+                        <select
+                          value={pollingUnitId}
+                          onChange={(e) => handlePollingUnitChange(e.target.value)}
+                          disabled={!wardId || loadingPus}
+                          className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
+                        >
+                          <option value="">
+                            {loadingPus
+                              ? '⏳ Fetching official Polling Units from INEC...'
+                              : !wardId
+                              ? '-- First select an Electoral Ward --'
+                              : '-- Select Polling Unit --'}
                           </option>
-                        ))}
-                      </select>
+                          {pollingUnits.map((pu) => (
+                            <option key={pu.id} value={pu.id}>
+                              {pu.name} {pu.code ? `(${pu.code})` : ''}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {inecMaintenance && (
+                        <p className="text-[10px] text-amber-700 mt-1">INEC offline — type your polling unit manually</p>
+                      )}
                     </div>
                   </div>
 

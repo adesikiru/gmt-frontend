@@ -3,8 +3,11 @@
 //
 // Fetches official Nigerian electoral hierarchy (State -> LGA -> Ward -> Polling Unit)
 // directly from INEC's public portal (https://cvr.inecnigeria.org/pu).
-// Includes in-memory caching and fallback protection.
+// Includes in-memory caching, HTML/maintenance-page detection, and static
+// fallback data so LGA dropdowns always populate even when INEC is offline.
 // ─────────────────────────────────────────────────────────────────────────────
+
+import { FALLBACK_LGAS } from './inec-fallback-data';
 
 export interface InecItem {
   id: string;
@@ -16,6 +19,14 @@ export interface InecItem {
 export interface InecState extends InecItem {
   code: string;
   fullName: string;
+}
+
+/** Thrown when the INEC portal is in maintenance mode */
+export class InecMaintenanceError extends Error {
+  constructor() {
+    super('INEC portal is currently under maintenance. Please try again later.');
+    this.name = 'InecMaintenanceError';
+  }
 }
 
 // Complete 36 States + FCT registered in INEC Portal
@@ -74,12 +85,29 @@ interface CacheEntry<T> {
 const cache = new Map<string, CacheEntry<InecItem[]>>();
 const CACHE_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
 
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 function formatTitleCase(str: string): string {
   return str
     .toLowerCase()
     .split(' ')
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
+}
+
+/**
+ * Detect when INEC returns an HTML maintenance page instead of JSON.
+ * The portal returns HTTP 200 with an HTML document titled
+ * "Update in Progress — INEC" when it is offline.
+ */
+function isHtmlResponse(text: string): boolean {
+  const trimmed = text.trimStart();
+  return (
+    trimmed.startsWith('<!DOCTYPE') ||
+    trimmed.startsWith('<html') ||
+    trimmed.toLowerCase().includes('update in progress')
+  );
 }
 
 function parseInecResponse(rawJson: unknown): InecItem[] {
@@ -115,6 +143,11 @@ function parseInecResponse(rawJson: unknown): InecItem[] {
   });
 }
 
+/**
+ * Fetches a URL from the INEC portal with a timeout.
+ * Throws `InecMaintenanceError` when the portal returns an HTML page
+ * (i.e. the system is under maintenance).
+ */
 async function fetchFromInecWithTimeout(url: string, timeoutMs = 12000): Promise<unknown> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -125,15 +158,31 @@ async function fetchFromInecWithTimeout(url: string, timeoutMs = 12000): Promise
       signal: controller.signal,
       next: { revalidate: 3600 },
     });
+
+    // Read as text first so we can detect HTML maintenance pages
+    const text = await res.text();
+
+    if (isHtmlResponse(text)) {
+      throw new InecMaintenanceError();
+    }
+
     if (!res.ok) {
       throw new Error(`INEC API returned HTTP ${res.status}`);
     }
-    return await res.json();
+
+    return JSON.parse(text);
   } finally {
     clearTimeout(timeoutId);
   }
 }
 
+// ── Public API ─────────────────────────────────────────────────────────────
+
+/**
+ * Fetch LGAs for a given state from INEC.
+ * Falls back to bundled static data when the portal is under maintenance,
+ * so the LGA dropdown always populates.
+ */
 export async function fetchInecLgas(stateId: string): Promise<InecItem[]> {
   const cacheKey = `lgas_${stateId}`;
   const cached = cache.get(cacheKey);
@@ -144,15 +193,35 @@ export async function fetchInecLgas(stateId: string): Promise<InecItem[]> {
   const url = `https://cvr.inecnigeria.org/PublicApi/lgas/1/Search?data%5BSearch%5D%5Bstate_id%5D=${encodeURIComponent(
     stateId,
   )}`;
-  const json = await fetchFromInecWithTimeout(url);
-  const items = parseInecResponse(json);
 
-  if (items.length > 0) {
-    cache.set(cacheKey, { data: items, timestamp: Date.now() });
+  try {
+    const json = await fetchFromInecWithTimeout(url);
+    const items = parseInecResponse(json);
+    if (items.length > 0) {
+      cache.set(cacheKey, { data: items, timestamp: Date.now() });
+      return items;
+    }
+  } catch (err) {
+    // On maintenance or network error, fall through to static fallback
+    if (!(err instanceof InecMaintenanceError)) {
+      console.warn(`INEC LGAs fetch failed for state ${stateId}:`, err);
+    }
   }
-  return items;
+
+  // ── Static fallback ──
+  const fallback = FALLBACK_LGAS[stateId];
+  if (fallback && fallback.length > 0) {
+    return fallback;
+  }
+
+  return [];
 }
 
+/**
+ * Fetch wards for a given LGA from INEC.
+ * Throws `InecMaintenanceError` when the portal is under maintenance —
+ * callers should show a free-text input instead of a dropdown.
+ */
 export async function fetchInecWards(lgaId: string): Promise<InecItem[]> {
   const cacheKey = `wards_${lgaId}`;
   const cached = cache.get(cacheKey);
@@ -172,6 +241,11 @@ export async function fetchInecWards(lgaId: string): Promise<InecItem[]> {
   return items;
 }
 
+/**
+ * Fetch polling units for a given ward from INEC.
+ * Throws `InecMaintenanceError` when the portal is under maintenance —
+ * callers should show a free-text input instead of a dropdown.
+ */
 export async function fetchInecPollingUnits(wardId: string): Promise<InecItem[]> {
   const cacheKey = `pus_${wardId}`;
   const cached = cache.get(cacheKey);

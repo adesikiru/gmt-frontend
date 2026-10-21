@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchInecWards } from '@/lib/inec';
+import { fetchInecWards, InecMaintenanceError } from '@/lib/inec';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -20,6 +20,16 @@ export async function GET(request: NextRequest) {
       count: wards.length,
     });
   } catch (error) {
+    if (error instanceof InecMaintenanceError) {
+      return NextResponse.json(
+        {
+          success: false,
+          maintenanceMode: true,
+          message: 'INEC portal is currently under maintenance. Please enter your ward manually.',
+        },
+        { status: 503 },
+      );
+    }
     console.error(`Error fetching INEC wards for LGA ${lgaId}:`, error);
     return NextResponse.json(
       {

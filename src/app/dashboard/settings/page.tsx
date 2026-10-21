@@ -59,11 +59,23 @@ export default function SettingsPage() {
   const [wardId, setWardId] = useState('');
   const [pollingUnitId, setPollingUnitId] = useState('');
 
+  // Selected textual names for database mapping & resolution
+  const [selectedStateName, setSelectedStateName] = useState('');
+  const [selectedLgaName, setSelectedLgaName] = useState('');
+  const [selectedWardName, setSelectedWardName] = useState('');
+  const [selectedPuName, setSelectedPuName] = useState('');
+
   // Cascading lists
   const [states, setStates] = useState<OrgItem[]>([]);
   const [lgas, setLgas] = useState<OrgItem[]>([]);
   const [wards, setWards] = useState<OrgItem[]>([]);
   const [pollingUnits, setPollingUnits] = useState<OrgItem[]>([]);
+
+  // Loading states for INEC API
+  const [loadingStates, setLoadingStates] = useState(false);
+  const [loadingLgas, setLoadingLgas] = useState(false);
+  const [loadingWards, setLoadingWards] = useState(false);
+  const [loadingPus, setLoadingPus] = useState(false);
 
   // Password update form state
   const [currentPassword, setCurrentPassword] = useState('');
@@ -75,14 +87,32 @@ export default function SettingsPage() {
     let isMounted = true;
 
     async function loadData() {
-      // 1. Fetch States list
+      // 1. Fetch States list from INEC public API
+      setLoadingStates(true);
+      let loadedStates: OrgItem[] = [];
       try {
-        const statesRes = await api.organization.states();
-        if (statesRes.success && Array.isArray(statesRes.data)) {
-          if (isMounted) setStates(statesRes.data as OrgItem[]);
+        const inecStatesRes = await api.inec.states();
+        if (inecStatesRes.success && Array.isArray(inecStatesRes.data) && inecStatesRes.data.length > 0) {
+          loadedStates = inecStatesRes.data as OrgItem[];
+        } else {
+          const orgStatesRes = await api.organization.states();
+          if (orgStatesRes.success && Array.isArray(orgStatesRes.data)) {
+            loadedStates = orgStatesRes.data as OrgItem[];
+          }
         }
       } catch {
-        // Continue
+        try {
+          const orgStatesRes = await api.organization.states();
+          if (orgStatesRes.success && Array.isArray(orgStatesRes.data)) {
+            loadedStates = orgStatesRes.data as OrgItem[];
+          }
+        } catch {
+          // Continue
+        }
+      }
+      if (isMounted) {
+        setStates(loadedStates);
+        setLoadingStates(false);
       }
 
       // 2. Fetch current user profile
@@ -110,34 +140,77 @@ export default function SettingsPage() {
               const wId = profile.wardId || profile.ward?.id || '';
               const pId = profile.pollingUnitId || profile.pollingUnit?.id || '';
 
+              if (profile.state?.name) setSelectedStateName(profile.state.name);
+              if (profile.lga?.name) setSelectedLgaName(profile.lga.name);
+              if (profile.ward?.name) setSelectedWardName(profile.ward.name);
+              if (profile.pollingUnit?.name) setSelectedPuName(profile.pollingUnit.name);
+
               setStateId(sId);
               setLgaId(lId);
               setWardId(wId);
               setPollingUnitId(pId);
 
-              // Cascade load LGAs, Wards, Polling Units if already assigned
+              // Cascade load LGAs, Wards, Polling Units accurately from INEC or DB
               if (sId) {
-                const lgaRes = await api.organization.lgas(sId);
-                if (lgaRes.success && Array.isArray(lgaRes.data) && isMounted) {
-                  setLgas(lgaRes.data as OrgItem[]);
+                try {
+                  const inecLgaRes = await api.inec.lgas(sId);
+                  if (inecLgaRes.success && Array.isArray(inecLgaRes.data) && inecLgaRes.data.length > 0) {
+                    if (isMounted) setLgas(inecLgaRes.data as OrgItem[]);
+                  } else {
+                    const lgaRes = await api.organization.lgas(sId);
+                    if (lgaRes.success && Array.isArray(lgaRes.data) && isMounted) {
+                      setLgas(lgaRes.data as OrgItem[]);
+                    }
+                  }
+                } catch {
+                  const lgaRes = await api.organization.lgas(sId);
+                  if (lgaRes.success && Array.isArray(lgaRes.data) && isMounted) {
+                    setLgas(lgaRes.data as OrgItem[]);
+                  }
                 }
               }
+
               if (lId) {
-                const wardRes = await api.organization.wards(lId);
-                if (wardRes.success && Array.isArray(wardRes.data) && isMounted) {
-                  setWards(wardRes.data as OrgItem[]);
+                try {
+                  const inecWardRes = await api.inec.wards(lId);
+                  if (inecWardRes.success && Array.isArray(inecWardRes.data) && inecWardRes.data.length > 0) {
+                    if (isMounted) setWards(inecWardRes.data as OrgItem[]);
+                  } else {
+                    const wardRes = await api.organization.wards(lId);
+                    if (wardRes.success && Array.isArray(wardRes.data) && isMounted) {
+                      setWards(wardRes.data as OrgItem[]);
+                    }
+                  }
+                } catch {
+                  const wardRes = await api.organization.wards(lId);
+                  if (wardRes.success && Array.isArray(wardRes.data) && isMounted) {
+                    setWards(wardRes.data as OrgItem[]);
+                  }
                 }
               }
+
               if (wId) {
-                const puRes = await api.organization.pollingUnits(wId);
-                if (puRes.success && Array.isArray(puRes.data) && isMounted) {
-                  setPollingUnits(puRes.data as OrgItem[]);
+                try {
+                  const inecPuRes = await api.inec.pollingUnits(wId);
+                  if (inecPuRes.success && Array.isArray(inecPuRes.data) && inecPuRes.data.length > 0) {
+                    if (isMounted) setPollingUnits(inecPuRes.data as OrgItem[]);
+                  } else {
+                    const puRes = await api.organization.pollingUnits(wId);
+                    if (puRes.success && Array.isArray(puRes.data) && isMounted) {
+                      setPollingUnits(puRes.data as OrgItem[]);
+                    }
+                  }
+                } catch {
+                  const puRes = await api.organization.pollingUnits(wId);
+                  if (puRes.success && Array.isArray(puRes.data) && isMounted) {
+                    setPollingUnits(puRes.data as OrgItem[]);
+                  }
                 }
               }
             }
           }
         } catch {
-          // If offline/error, use local cache
+          // If offline/error, use local state
         }
       }
 
@@ -151,74 +224,144 @@ export default function SettingsPage() {
     };
   }, [token]);
 
-  // Handle State selection change
+  // Handle State selection change - Fetches LGAs from INEC Public API
   const handleStateChange = async (selectedStateId: string) => {
     setStateId(selectedStateId);
     setLgaId('');
     setWardId('');
     setPollingUnitId('');
+    setSelectedLgaName('');
+    setSelectedWardName('');
+    setSelectedPuName('');
+    setLgas([]);
     setWards([]);
     setPollingUnits([]);
 
+    const stateObj = states.find((s) => s.id === selectedStateId);
+    setSelectedStateName(stateObj?.name || '');
+
     if (selectedStateId) {
+      setLoadingLgas(true);
       try {
-        const res = await api.organization.lgas(selectedStateId);
-        if (res.success && Array.isArray(res.data)) {
+        const res = await api.inec.lgas(selectedStateId);
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           setLgas(res.data as OrgItem[]);
+        } else {
+          const bRes = await api.organization.lgas(selectedStateId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setLgas(bRes.data as OrgItem[]);
+          }
         }
       } catch {
-        setLgas([]);
+        try {
+          const bRes = await api.organization.lgas(selectedStateId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setLgas(bRes.data as OrgItem[]);
+          }
+        } catch {
+          setLgas([]);
+        }
+      } finally {
+        setLoadingLgas(false);
       }
     } else {
       setLgas([]);
     }
   };
 
-  // Handle LGA selection change
+  // Handle LGA selection change - Fetches Wards from INEC Public API
   const handleLgaChange = async (selectedLgaId: string) => {
     setLgaId(selectedLgaId);
     setWardId('');
     setPollingUnitId('');
+    setSelectedWardName('');
+    setSelectedPuName('');
+    setWards([]);
     setPollingUnits([]);
 
+    const lgaObj = lgas.find((l) => l.id === selectedLgaId);
+    setSelectedLgaName(lgaObj?.name || (lgaObj as unknown as { rawName?: string })?.rawName || '');
+
     if (selectedLgaId) {
+      setLoadingWards(true);
       try {
-        const res = await api.organization.wards(selectedLgaId);
-        if (res.success && Array.isArray(res.data)) {
+        const res = await api.inec.wards(selectedLgaId);
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           setWards(res.data as OrgItem[]);
+        } else {
+          const bRes = await api.organization.wards(selectedLgaId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setWards(bRes.data as OrgItem[]);
+          }
         }
       } catch {
-        setWards([]);
+        try {
+          const bRes = await api.organization.wards(selectedLgaId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setWards(bRes.data as OrgItem[]);
+          }
+        } catch {
+          setWards([]);
+        }
+      } finally {
+        setLoadingWards(false);
       }
     } else {
       setWards([]);
     }
   };
 
-  // Handle Ward selection change
+  // Handle Ward selection change - Fetches Polling Units from INEC Public API
   const handleWardChange = async (selectedWardId: string) => {
     setWardId(selectedWardId);
     setPollingUnitId('');
+    setSelectedPuName('');
+    setPollingUnits([]);
+
+    const wardObj = wards.find((w) => w.id === selectedWardId);
+    setSelectedWardName(wardObj?.name || (wardObj as unknown as { rawName?: string })?.rawName || '');
 
     if (selectedWardId) {
+      setLoadingPus(true);
       try {
-        const res = await api.organization.pollingUnits(selectedWardId);
-        if (res.success && Array.isArray(res.data)) {
+        const res = await api.inec.pollingUnits(selectedWardId);
+        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
           setPollingUnits(res.data as OrgItem[]);
+        } else {
+          const bRes = await api.organization.pollingUnits(selectedWardId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setPollingUnits(bRes.data as OrgItem[]);
+          }
         }
       } catch {
-        setPollingUnits([]);
+        try {
+          const bRes = await api.organization.pollingUnits(selectedWardId);
+          if (bRes.success && Array.isArray(bRes.data)) {
+            setPollingUnits(bRes.data as OrgItem[]);
+          }
+        } catch {
+          setPollingUnits([]);
+        }
+      } finally {
+        setLoadingPus(false);
       }
     } else {
       setPollingUnits([]);
     }
   };
 
-  // If user toggles isVoter ON and no state is selected, default to Ogun State
+  // Handle Polling Unit selection
+  const handlePollingUnitChange = (selectedPuId: string) => {
+    setPollingUnitId(selectedPuId);
+    const puObj = pollingUnits.find((p) => p.id === selectedPuId);
+    setSelectedPuName((puObj as unknown as { rawName?: string })?.rawName || puObj?.name || '');
+  };
+
+  // If user toggles isVoter ON and no state is selected, default to Ogun State and fetch LGAs
   const handleToggleVoter = (checked: boolean) => {
     setIsVoter(checked);
     if (checked && !stateId && states.length > 0) {
-      const ogun = states.find((s) => s.name.toLowerCase().includes('ogun')) || states[0];
+      const ogun = states.find((s) => s.name.toLowerCase().includes('ogun') || s.id === '28') || states[0];
       if (ogun) {
         handleStateChange(ogun.id);
       }
@@ -263,16 +406,20 @@ export default function SettingsPage() {
       isRegisteredVoter: isVoter,
       voterCardNumber: isVoter ? vin.trim().toUpperCase() : undefined,
       stateId: isVoter ? stateId || undefined : undefined,
+      stateName: isVoter ? selectedStateName || undefined : undefined,
       lgaId: isVoter ? lgaId || undefined : undefined,
+      lgaName: isVoter ? selectedLgaName || undefined : undefined,
       wardId: isVoter ? wardId || undefined : undefined,
+      wardName: isVoter ? selectedWardName || undefined : undefined,
       pollingUnitId: isVoter ? pollingUnitId || undefined : undefined,
+      pollingUnitName: isVoter ? selectedPuName || undefined : undefined,
     };
 
     try {
       if (token) {
         const res = await api.auth.updateProfile(token, updatePayload);
         if (res.success) {
-          setProfileSuccess('Your profile and electoral voter records have been successfully updated!');
+          setProfileSuccess('Your profile and voter credentials have been successfully updated from INEC records!');
           await refreshUser();
         } else {
           setProfileError(res.message || 'Failed to update profile. Please try again.');
@@ -531,15 +678,21 @@ export default function SettingsPage() {
                   {/* State & LGA Dropdowns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                        State *
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                          State *
+                        </label>
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-full">
+                          INEC Directory
+                        </span>
+                      </div>
                       <select
                         value={stateId}
                         onChange={(e) => handleStateChange(e.target.value)}
-                        className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                        disabled={loadingStates}
+                        className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-60"
                       >
-                        <option value="">-- Select State --</option>
+                        <option value="">{loadingStates ? '⏳ Loading states from INEC...' : '-- Select State --'}</option>
                         {states.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name}
@@ -549,16 +702,29 @@ export default function SettingsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                        Local Government Area (LGA) *
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                          Local Government Area (LGA) *
+                        </label>
+                        {loadingLgas && (
+                          <span className="text-[10px] font-bold text-emerald-700 animate-pulse">
+                            Querying INEC API...
+                          </span>
+                        )}
+                      </div>
                       <select
                         value={lgaId}
                         onChange={(e) => handleLgaChange(e.target.value)}
-                        disabled={!stateId}
+                        disabled={!stateId || loadingLgas}
                         className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                       >
-                        <option value="">-- Select LGA --</option>
+                        <option value="">
+                          {loadingLgas
+                            ? '⏳ Fetching official LGAs from INEC...'
+                            : !stateId
+                            ? '-- First select a state --'
+                            : '-- Select LGA --'}
+                        </option>
                         {lgas.map((l) => (
                           <option key={l.id} value={l.id}>
                             {l.name}
@@ -571,16 +737,29 @@ export default function SettingsPage() {
                   {/* Ward & Polling Unit Dropdowns */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                        Electoral Ward *
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                          Electoral Ward *
+                        </label>
+                        {loadingWards && (
+                          <span className="text-[10px] font-bold text-emerald-700 animate-pulse">
+                            Querying INEC Wards...
+                          </span>
+                        )}
+                      </div>
                       <select
                         value={wardId}
                         onChange={(e) => handleWardChange(e.target.value)}
-                        disabled={!lgaId}
+                        disabled={!lgaId || loadingWards}
                         className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                       >
-                        <option value="">-- Select Ward --</option>
+                        <option value="">
+                          {loadingWards
+                            ? '⏳ Fetching official Wards from INEC...'
+                            : !lgaId
+                            ? '-- First select an LGA --'
+                            : '-- Select Ward --'}
+                        </option>
                         {wards.map((w) => (
                           <option key={w.id} value={w.id}>
                             {w.name}
@@ -590,16 +769,29 @@ export default function SettingsPage() {
                     </div>
 
                     <div>
-                      <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider mb-1">
-                        Polling Unit (PU)
-                      </label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="block text-xs font-bold text-emerald-950 uppercase tracking-wider">
+                          Polling Unit (PU)
+                        </label>
+                        {loadingPus && (
+                          <span className="text-[10px] font-bold text-emerald-700 animate-pulse">
+                            Querying INEC PUs...
+                          </span>
+                        )}
+                      </div>
                       <select
                         value={pollingUnitId}
-                        onChange={(e) => setPollingUnitId(e.target.value)}
-                        disabled={!wardId}
+                        onChange={(e) => handlePollingUnitChange(e.target.value)}
+                        disabled={!wardId || loadingPus}
                         className="w-full px-3.5 py-2.5 border border-emerald-300 rounded-xl bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:opacity-50"
                       >
-                        <option value="">-- Select Polling Unit --</option>
+                        <option value="">
+                          {loadingPus
+                            ? '⏳ Fetching official Polling Units from INEC...'
+                            : !wardId
+                            ? '-- First select an Electoral Ward --'
+                            : '-- Select Polling Unit --'}
+                        </option>
                         {pollingUnits.map((pu) => (
                           <option key={pu.id} value={pu.id}>
                             {pu.name} {pu.code ? `(${pu.code})` : ''}

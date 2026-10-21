@@ -99,9 +99,12 @@ export const api = {
       }
       return request(`/api/v1/events${query}`);
     },
-    get: (id: string) => request(`/api/v1/events/${id}`),
+    get: (id: string, userId?: string) =>
+      request(`/api/v1/events/${id}${userId ? `?userId=${encodeURIComponent(userId)}` : ''}`),
     create: (token: string, body: unknown) =>
       authRequest('/api/v1/events', token, { method: 'POST', body: JSON.stringify(body) }),
+    update: (token: string, id: string, body: unknown) =>
+      authRequest(`/api/v1/events/${id}`, token, { method: 'PATCH', body: JSON.stringify(body) }),
     publish: (token: string, id: string) =>
       authRequest(`/api/v1/events/${id}/publish`, token, { method: 'PATCH' }),
     delete: (token: string, id: string) =>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
 
@@ -13,8 +14,14 @@ interface EventItem {
   venue: string;
   lga: string;
   description: string;
+  imageUrl?: string;
+  images?: string[];
+  videoUrl?: string;
+  videos?: string[];
+  isPast: boolean;
   rsvpCount: number;
   userRsvp: boolean;
+  rawDate: Date;
 }
 
 interface BackendEvent {
@@ -22,62 +29,17 @@ interface BackendEvent {
   title: string;
   description: string;
   location?: string;
+  category?: string;
   startDate: string;
   endDate?: string;
+  imageUrl?: string;
+  images?: string[];
+  videoUrl?: string;
+  videos?: string[];
+  isPast?: boolean;
   rsvpCount?: number;
   userRsvp?: boolean;
 }
-
-const fallbackEvents: EventItem[] = [
-  {
-    id: 'evt-1',
-    title: 'Ogun Central Grassroots Leadership Townhall',
-    category: 'Leadership Summit',
-    date: 'Saturday, Nov 15, 2026',
-    time: '10:00 AM WAT',
-    venue: 'June 12 Cultural Centre, Kuto, Abeokuta',
-    lga: 'Abeokuta South',
-    description: 'Strategic gathering of ward mobilizers and grassroots executives to discuss development initiatives and community empowerment.',
-    rsvpCount: 142,
-    userRsvp: false,
-  },
-  {
-    id: 'evt-2',
-    title: 'Ward Coordinators Digital Verification Workshop',
-    category: 'Training',
-    date: 'Wednesday, Nov 25, 2026',
-    time: '11:00 AM WAT',
-    venue: 'Ijebu-Ode Town Hall, Ijebu-Ode',
-    lga: 'Ijebu Ode',
-    description: 'Training ward administrators on verifying voter records and member polling unit validations.',
-    rsvpCount: 88,
-    userRsvp: false,
-  },
-  {
-    id: 'evt-3',
-    title: 'Grassroots Farmers & SME Cooperative Forum',
-    category: 'Empowerment',
-    date: 'Thursday, Dec 10, 2026',
-    time: '09:30 AM WAT',
-    venue: 'Sango-Ota Community Centre, Ota',
-    lga: 'Ado-Odo/Ota',
-    description: 'Distribution of agricultural inputs, fertilizer vouchers, and SME seed grants to rural cooperative members.',
-    rsvpCount: 215,
-    userRsvp: false,
-  },
-  {
-    id: 'evt-4',
-    title: 'Ogun West Youth Innovation & Leadership Summit',
-    category: 'Leadership Summit',
-    date: 'Saturday, Dec 20, 2026',
-    time: '11:00 AM WAT',
-    venue: 'Ilaro Civic Centre, Ilaro',
-    lga: 'Yewa South',
-    description: 'Interactive symposium connecting young tech innovators, artisans, and student leaders with mentorship and equipment vouchers.',
-    rsvpCount: 176,
-    userRsvp: false,
-  },
-];
 
 function formatEventDate(dateStr: string) {
   try {
@@ -101,8 +63,9 @@ function formatEventTime(dateStr: string) {
 
 export default function EventsPage() {
   const { user, token } = useAuth();
-  const [events, setEvents] = useState<EventItem[]>(fallbackEvents);
-  const [filter, setFilter] = useState('All');
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [viewTab, setViewTab] = useState<'all' | 'upcoming' | 'past'>('all');
+  const [selectedCategory, setSelectedCategory] = useState('All');
   const [loading, setLoading] = useState(true);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -136,56 +99,52 @@ export default function EventsPage() {
     }
   };
 
-  // Load events from backend API on mount or when user changes
+  // Load real production events from backend API
   useEffect(() => {
     let isMounted = true;
     const storedRsvps = getStoredRsvps();
 
     async function fetchEvents() {
+      setLoading(true);
       try {
         const res = await api.events.list(user?.id ? { userId: user.id } : undefined);
-        if (res.success && Array.isArray(res.data) && res.data.length > 0) {
+        if (res.success && Array.isArray(res.data)) {
           const apiEvents = res.data as BackendEvent[];
           const formatted: EventItem[] = apiEvents.map((e) => {
-            // Determine if user has RSVP'd from backend or localStorage
             const userRsvp = e.userRsvp !== undefined ? e.userRsvp : !!storedRsvps[e.id];
+            const rawDate = new Date(e.startDate);
+            const isPastCalculated = !!e.isPast || rawDate < new Date();
+
             return {
               id: e.id,
               title: e.title,
-              category: 'Leadership Summit',
+              category: e.category || (isPastCalculated ? 'Inauguration Ceremony' : 'Leadership Summit'),
               date: formatEventDate(e.startDate),
               time: formatEventTime(e.startDate),
-              venue: e.location || 'Ogun State GMT Secretariat',
-              lga: 'Ogun State',
+              venue: e.location || 'Official Venue Announced Soon',
+              lga: 'State Secretariat',
               description: e.description,
-              rsvpCount: (e.rsvpCount ?? 50) + (userRsvp && !e.userRsvp ? 1 : 0),
+              imageUrl: e.imageUrl,
+              images: e.images || [],
+              videoUrl: e.videoUrl,
+              videos: e.videos || [],
+              isPast: isPastCalculated,
+              rawDate,
+              rsvpCount: (e.rsvpCount ?? 0) + (userRsvp && !e.userRsvp ? 1 : 0),
               userRsvp,
             };
           });
 
           if (isMounted) {
             setEvents(formatted);
-            setLoading(false);
           }
-          return;
+        } else {
+          if (isMounted) setEvents([]);
         }
       } catch {
-        // Fallback
-      }
-
-      // If backend returns empty or network error, use fallbackEvents merged with stored RSVPs
-      if (isMounted) {
-        setEvents((prev) =>
-          prev.map((evt) => {
-            const hasRsvp = !!storedRsvps[evt.id];
-            return {
-              ...evt,
-              userRsvp: hasRsvp,
-              rsvpCount: hasRsvp && !evt.userRsvp ? evt.rsvpCount + 1 : evt.rsvpCount,
-            };
-          })
-        );
-        setLoading(false);
+        if (isMounted) setEvents([]);
+      } finally {
+        if (isMounted) setLoading(false);
       }
     }
 
@@ -197,11 +156,14 @@ export default function EventsPage() {
   }, [user?.id]);
 
   // Toggle RSVP
-  const toggleRsvp = async (id: string) => {
+  const toggleRsvp = async (e: React.MouseEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
     let nextStatus = false;
     let eventTitle = '';
 
-    // 1. Optimistic UI update
+    // Optimistic UI update
     setEvents((prev) =>
       prev.map((evt) => {
         if (evt.id === id) {
@@ -217,32 +179,45 @@ export default function EventsPage() {
       })
     );
 
-    // 2. Persist in localStorage immediately so reload NEVER clears it
+    // Persist in localStorage
     saveStoredRsvp(id, nextStatus);
 
-    // 3. Show feedback toast
+    // Show feedback toast
     if (nextStatus) {
-      setToastMessage(`✓ RSVP Confirmed: You are attending "${eventTitle.slice(0, 35)}..."`);
+      setToastMessage(`✓ RSVP Confirmed: You are attending "${eventTitle.slice(0, 32)}..."`);
     } else {
-      setToastMessage(`RSVP Removed for "${eventTitle.slice(0, 35)}..."`);
+      setToastMessage(`RSVP Removed for "${eventTitle.slice(0, 32)}..."`);
     }
     setTimeout(() => setToastMessage(null), 4000);
 
-    // 4. Call backend API if user is authenticated and token is available
+    // Call backend API
     if (token) {
       try {
         await api.events.toggleRsvp(token, id);
       } catch {
-        // Already persisted in localStorage as fallback
+        // Handled optimistically
       }
     }
   };
 
-  const categories = ['All', 'Leadership Summit', 'Training', 'Empowerment'];
-  const filteredEvents = filter === 'All' ? events : events.filter((e) => e.category === filter);
+  // Derive upcoming vs past
+  const upcomingEvents = events.filter((e) => !e.isPast);
+  const pastEvents = events.filter((e) => e.isPast);
+
+  // Available categories
+  const allCategories = ['All', ...Array.from(new Set(events.map((e) => e.category).filter(Boolean)))];
+
+  // Filter based on viewTab and selectedCategory
+  const filterList = (list: EventItem[]) => {
+    if (selectedCategory === 'All') return list;
+    return list.filter((e) => e.category === selectedCategory);
+  };
+
+  const displayedUpcoming = filterList(upcomingEvents);
+  const displayedPast = filterList(pastEvents);
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-12">
+    <div className="max-w-6xl mx-auto space-y-8 pb-16">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-gray-900 text-white px-5 py-3.5 rounded-2xl shadow-xl flex items-center space-x-3 text-sm font-semibold animate-slide-up border border-gray-700">
@@ -252,21 +227,62 @@ export default function EventsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-6">
         <div>
-          <h1 className="text-2xl font-black text-gray-900">Events &amp; Congresses</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-gray-900">Events &amp; Congresses</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Stay active and attend official GMT meetings, leadership summits, and ward workshops.
+            Browse upcoming summits &amp; flag-offs, or view photo &amp; video archives from past state inaugurations.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {categories.map((cat) => (
+
+        {/* View Tabs */}
+        <div className="flex bg-gray-100 p-1 rounded-2xl self-start sm:self-center border border-gray-200">
+          <button
+            onClick={() => setViewTab('all')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewTab === 'all'
+                ? 'bg-white text-gray-900 shadow-sm'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            All Events ({events.length})
+          </button>
+          <button
+            onClick={() => setViewTab('upcoming')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewTab === 'upcoming'
+                ? 'bg-emerald-600 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            Upcoming ({upcomingEvents.length})
+          </button>
+          <button
+            onClick={() => setViewTab('past')}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+              viewTab === 'past'
+                ? 'bg-amber-600 text-white shadow-sm'
+                : 'text-gray-500 hover:text-gray-900'
+            }`}
+          >
+            Past &amp; Inaugurations ({pastEvents.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Category Filter Pills */}
+      {allCategories.length > 2 && (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider mr-1">
+            Category:
+          </span>
+          {allCategories.map((cat) => (
             <button
               key={cat}
-              onClick={() => setFilter(cat)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                filter === cat
-                  ? 'bg-emerald-600 text-white shadow-sm'
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                selectedCategory === cat
+                  ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
               }`}
             >
@@ -274,78 +290,211 @@ export default function EventsPage() {
             </button>
           ))}
         </div>
-      </div>
+      )}
 
       {loading ? (
-        <div className="space-y-4">
+        <div className="space-y-6">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm animate-pulse h-40" />
+            <div key={i} className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm animate-pulse h-48" />
           ))}
         </div>
+      ) : events.length === 0 ? (
+        <div className="bg-white rounded-3xl border border-gray-100 p-16 text-center text-gray-500 space-y-3">
+          <div className="text-4xl">📅</div>
+          <h3 className="font-bold text-gray-800 text-lg">No Events Scheduled At This Time</h3>
+          <p className="text-xs text-gray-400 max-w-md mx-auto">
+            The administrative team will publish upcoming mobilization rallies, flag-offs, and state congresses here.
+          </p>
+        </div>
       ) : (
-        /* Events List */
-        <div className="space-y-4">
-          {filteredEvents.map((evt) => (
-            <div
-              key={evt.id}
-              className={`bg-white rounded-3xl border p-6 md:p-8 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between gap-6 ${
-                evt.userRsvp ? 'border-emerald-300 ring-2 ring-emerald-50' : 'border-gray-100'
-              }`}
-            >
-              <div className="space-y-3 flex-1">
-                <div className="flex items-center space-x-3">
-                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    {evt.category}
+        <div className="space-y-12">
+          {/* SECTION 1: UPCOMING EVENTS */}
+          {(viewTab === 'all' || viewTab === 'upcoming') && (
+            <section className="space-y-5">
+              <div className="flex items-center justify-between border-b border-emerald-100 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                  <h2 className="text-xl font-black text-gray-900">
+                    Upcoming GMT Events &amp; Flag-Offs
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    {displayedUpcoming.length} Scheduled
                   </span>
-                  <span className="text-xs font-medium text-gray-500">
-                    👥 {evt.rsvpCount} Attending
-                  </span>
-                  {evt.userRsvp && (
-                    <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
-                      ✓ You are attending
-                    </span>
-                  )}
-                </div>
-                <h2 className="text-xl font-bold text-gray-900">{evt.title}</h2>
-                <p className="text-sm text-gray-600 leading-relaxed">{evt.description}</p>
-                <div className="flex flex-wrap gap-y-2 gap-x-6 text-xs text-gray-500 pt-2">
-                  <div className="flex items-center space-x-1.5">
-                    <span>📅</span>
-                    <strong className="text-gray-700">{evt.date}</strong>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <span>⏰</span>
-                    <span>{evt.time}</span>
-                  </div>
-                  <div className="flex items-center space-x-1.5">
-                    <span>📍</span>
-                    <span>{evt.venue}</span>
-                  </div>
                 </div>
               </div>
 
-              <div className="flex md:flex-col justify-end items-end gap-3 self-end md:self-center">
-                <button
-                  type="button"
-                  onClick={() => toggleRsvp(evt.id)}
-                  className={`px-6 py-3 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center space-x-2 ${
-                    evt.userRsvp
-                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
-                      : 'bg-emerald-600 hover:bg-emerald-700 text-white'
-                  }`}
-                >
-                  <span>{evt.userRsvp ? '✓ Attending' : 'RSVP to Attend'}</span>
-                </button>
-              </div>
-            </div>
-          ))}
+              {displayedUpcoming.length === 0 ? (
+                <div className="bg-emerald-50/40 rounded-3xl border border-emerald-100/60 p-8 text-center text-emerald-800 text-sm">
+                  No upcoming events in this category right now.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-6">
+                  {displayedUpcoming.map((evt) => (
+                    <Link
+                      key={evt.id}
+                      href={`/dashboard/events/${evt.id}`}
+                      className={`group bg-white rounded-3xl border p-6 md:p-8 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row justify-between gap-6 cursor-pointer ${
+                        evt.userRsvp ? 'border-emerald-300 ring-2 ring-emerald-50' : 'border-gray-100 hover:border-emerald-200'
+                      }`}
+                    >
+                      {/* Left: Thumbnail & Details */}
+                      <div className="flex flex-col sm:flex-row gap-6 flex-1">
+                        {evt.imageUrl && (
+                          <div className="w-full sm:w-48 h-36 rounded-2xl overflow-hidden bg-gray-100 shrink-0">
+                            <img
+                              src={evt.imageUrl}
+                              alt={evt.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          </div>
+                        )}
+                        <div className="space-y-3 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs font-bold px-3 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              {evt.category}
+                            </span>
+                            <span className="text-xs font-semibold text-gray-500">
+                              👥 {evt.rsvpCount} Attending
+                            </span>
+                            {evt.userRsvp && (
+                              <span className="text-xs font-extrabold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800">
+                                ✓ You are attending
+                              </span>
+                            )}
+                          </div>
+                          <h3 className="text-xl font-bold text-gray-900 group-hover:text-emerald-700 transition-colors">
+                            {evt.title}
+                          </h3>
+                          <p className="text-xs text-gray-600 line-clamp-2 leading-relaxed">
+                            {evt.description}
+                          </p>
+                          <div className="flex flex-wrap gap-y-2 gap-x-6 text-xs text-gray-500 pt-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span>📅</span>
+                              <strong className="text-gray-700">{evt.date}</strong>
+                            </div>
+                            <div className="flex items-center space-x-1.5">
+                              <span>⏰</span>
+                              <span>{evt.time}</span>
+                            </div>
+                            <div className="flex items-center space-x-1.5">
+                              <span>📍</span>
+                              <span className="text-gray-700">{evt.venue}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-          {filteredEvents.length === 0 && (
-            <div className="bg-white rounded-3xl border border-gray-100 p-12 text-center text-gray-500">
-              <div className="text-4xl mb-3">📅</div>
-              <h3 className="font-bold text-gray-800 text-lg">No events in this category</h3>
-              <p className="text-xs text-gray-400 mt-1">Try selecting another filter from above.</p>
-            </div>
+                      {/* Right: RSVP & Action */}
+                      <div className="flex md:flex-col justify-end items-end gap-3 self-end md:self-center shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleRsvp(e, evt.id)}
+                          className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm flex items-center space-x-1.5 ${
+                            evt.userRsvp
+                              ? 'bg-emerald-100 text-emerald-800 border border-emerald-300 hover:bg-emerald-200'
+                              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                          }`}
+                        >
+                          <span>{evt.userRsvp ? '✓ Attending' : 'RSVP to Attend'}</span>
+                        </button>
+                        <span className="text-xs font-bold text-emerald-600 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                          View Details &amp; Media →
+                        </span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* SECTION 2: PAST EVENTS & INAUGURATIONS */}
+          {(viewTab === 'all' || viewTab === 'past') && (
+            <section className="space-y-5">
+              <div className="flex items-center justify-between border-b border-amber-200/70 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl">🏆</span>
+                  <h2 className="text-xl font-black text-gray-900">
+                    Past Events, State Inaugurations &amp; Coverage
+                  </h2>
+                  <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                    {displayedPast.length} Recorded
+                  </span>
+                </div>
+              </div>
+
+              {displayedPast.length === 0 ? (
+                <div className="bg-amber-50/40 rounded-3xl border border-amber-100 p-8 text-center text-amber-800 text-sm">
+                  No past events archived in this category yet.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {displayedPast.map((evt) => {
+                    const photoCount = (evt.images?.length || 0) + (evt.imageUrl ? 1 : 0);
+                    const videoCount = (evt.videos?.length || 0) + (evt.videoUrl ? 1 : 0);
+
+                    return (
+                      <Link
+                        key={evt.id}
+                        href={`/dashboard/events/${evt.id}`}
+                        className="group bg-white rounded-3xl border border-gray-100 hover:border-amber-300 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer"
+                      >
+                        <div className="space-y-3">
+                          {/* Image preview */}
+                          {evt.imageUrl && (
+                            <div className="relative h-44 w-full rounded-2xl overflow-hidden bg-gray-100">
+                              <img
+                                src={evt.imageUrl}
+                                alt={evt.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute top-3 left-3 flex gap-2">
+                                <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-amber-600 text-white shadow">
+                                  Past Inauguration
+                                </span>
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
+                            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                              {evt.category}
+                            </span>
+                            {photoCount > 0 && (
+                              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                                📸 {photoCount} Photos
+                              </span>
+                            )}
+                            {videoCount > 0 && (
+                              <span className="text-xs font-semibold text-rose-700 bg-rose-50 px-2.5 py-0.5 rounded-full border border-rose-200">
+                                🎥 Video Highlights
+                              </span>
+                            )}
+                          </div>
+
+                          <h3 className="text-lg font-black text-gray-900 group-hover:text-amber-800 transition-colors">
+                            {evt.title}
+                          </h3>
+                          <p className="text-xs text-gray-600 line-clamp-3 leading-relaxed">
+                            {evt.description}
+                          </p>
+                        </div>
+
+                        <div className="border-t border-gray-100 pt-3 flex items-center justify-between text-xs text-gray-500">
+                          <div>
+                            📍 <span className="font-semibold text-gray-700">{evt.venue}</span>
+                          </div>
+                          <span className="font-bold text-amber-700 group-hover:translate-x-1 transition-transform inline-flex items-center gap-1">
+                            View Coverage &amp; Pictures →
+                          </span>
+                        </div>
+                      </Link>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
           )}
         </div>
       )}

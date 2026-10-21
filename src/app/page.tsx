@@ -12,56 +12,17 @@ interface ApiEvent {
   title: string;
   description: string;
   location?: string;
+  category?: string;
   startDate: string;
   endDate?: string;
+  imageUrl?: string;
+  images?: string[];
+  videoUrl?: string;
+  videos?: string[];
+  isPast?: boolean;
   status: string;
+  rsvpCount?: number;
 }
-
-function formatEventDate(dateStr: string) {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleDateString('en-NG', { weekday: 'long', year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Africa/Lagos' });
-  } catch {
-    return dateStr;
-  }
-}
-
-function formatEventTime(dateStr: string) {
-  try {
-    const d = new Date(dateStr);
-    return d.toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Africa/Lagos' }) + ' WAT';
-  } catch {
-    return '';
-  }
-}
-
-// Curated baseline data
-const defaultEvents: ApiEvent[] = [
-  {
-    id: 'evt-1',
-    title: 'Ogun Central Grassroots Leadership Townhall',
-    description: 'Strategic gathering of ward mobilizers and grassroots executives to discuss development initiatives and community empowerment.',
-    location: 'June 12 Cultural Centre, Kuto, Abeokuta',
-    startDate: '2026-11-14T09:00:00.000Z',
-    status: 'PUBLISHED',
-  },
-  {
-    title: 'Ward Coordinators Digital Verification Workshop',
-    id: 'evt-2',
-    description: 'Training ward administrators on verifying voter records and member polling unit validations.',
-    location: 'Ijebu-Ode Town Hall, Ijebu-Ode',
-    startDate: '2026-11-21T10:00:00.000Z',
-    status: 'PUBLISHED',
-  },
-  {
-    title: 'Grassroots Farmers & SME Cooperative Forum',
-    id: 'evt-3',
-    description: 'Distribution of agricultural inputs, fertilizer vouchers, and SME seed grants to rural cooperative members.',
-    location: 'Sango-Ota Community Centre, Ota',
-    startDate: '2026-11-30T08:30:00.000Z',
-    status: 'PUBLISHED',
-  },
-];
 
   const defaultEmpowerments = [
     {
@@ -123,9 +84,9 @@ export default function Home() {
   // Mobile menu
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // Live state with fallbacks
-  const [events, setEvents] = useState<ApiEvent[]>(defaultEvents);
-  const [eventsLoading, setEventsLoading] = useState(false);
+  // Live state
+  const [events, setEvents] = useState<ApiEvent[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(true);
   const [empowermentList, setEmpowermentList] = useState(defaultEmpowerments);
   const [newsList, setNewsList] = useState(defaultMediaItems);
 
@@ -468,23 +429,26 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Upcoming Events Section — Live from API */}
+      {/* Events Section — Live from API (Upcoming & Past Inaugurations) */}
       <section id="events" className="py-24 bg-emerald-50/30 border-t border-b border-emerald-100/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-16">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-14">
             <div>
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100">
-                Community Calendar
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-white px-3 py-1 rounded-full border border-emerald-100 shadow-xs">
+                Official Movements &amp; Congresses
               </span>
               <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-4">
-                Upcoming GMT Events
+                GMT Events &amp; State Inaugurations
               </h2>
+              <p className="text-gray-500 text-sm mt-2 max-w-2xl">
+                Stay connected with live campaign flag-offs, or view high-resolution photo galleries and video archives from our historic state chapter inaugurations.
+              </p>
             </div>
             <Link
-              href={isLoggedIn ? '/dashboard' : '/register'}
+              href={isLoggedIn ? '/dashboard/events' : '/register'}
               className="mt-4 md:mt-0 text-sm font-bold text-emerald-600 hover:text-emerald-700 flex items-center space-x-1"
             >
-              <span>{isLoggedIn ? 'View all events in dashboard' : 'Register to attend any event'}</span>
+              <span>{isLoggedIn ? 'View all events in member portal' : 'Register to attend an event'}</span>
               <span>&rarr;</span>
             </Link>
           </div>
@@ -492,51 +456,111 @@ export default function Home() {
           {eventsLoading ? (
             <div className="grid md:grid-cols-3 gap-8">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white rounded-2xl p-7 border border-emerald-100 animate-pulse h-64" />
+                <div key={i} className="bg-white rounded-3xl p-7 border border-emerald-100 animate-pulse h-72 shadow-sm" />
               ))}
             </div>
           ) : events.length === 0 ? (
-            <div className="text-center py-16">
+            <div className="text-center py-16 bg-white rounded-3xl border border-gray-100 p-12">
               <div className="text-5xl mb-4">📅</div>
-              <h3 className="text-xl font-bold text-gray-700 mb-2">No Events Scheduled Yet</h3>
-              <p className="text-gray-500 text-sm">Check back soon — the admin team will publish upcoming events here.</p>
+              <h3 className="text-xl font-bold text-gray-700 mb-2">No Events Published Yet</h3>
+              <p className="text-gray-500 text-sm">Check back soon — the administrative team will publish upcoming schedules here.</p>
             </div>
           ) : (
             <div className="grid md:grid-cols-3 gap-8">
-              {events.slice(0, 6).map((evt) => (
-                <div
-                  key={evt.id}
-                  className="bg-white rounded-2xl p-7 border border-emerald-100 shadow-sm hover:shadow-lg hover:-translate-y-1 transition-all flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-xs font-bold bg-emerald-100 text-emerald-800 px-3 py-1 rounded-full">
-                        GMT Event
-                      </span>
-                      <span className="text-xs font-medium text-gray-400">{formatEventTime(evt.startDate)}</span>
-                    </div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-3 leading-snug">
-                      {evt.title}
-                    </h3>
-                    <p className="text-gray-600 text-sm mb-6 leading-relaxed line-clamp-3">
-                      {evt.description}
-                    </p>
-                  </div>
+              {events.slice(0, 6).map((evt) => {
+                const isPast = !!evt.isPast || new Date(evt.startDate) < new Date();
+                const photoCount = (evt.images?.length || 0) + (evt.imageUrl ? 1 : 0);
+                const videoCount = (evt.videos?.length || 0) + (evt.videoUrl ? 1 : 0);
 
-                  <div className="pt-4 border-t border-gray-100">
-                    <div className="text-xs font-semibold text-emerald-700 mb-1">{formatEventDate(evt.startDate)}</div>
-                    {evt.location && (
-                      <div className="text-xs text-gray-500 mb-4">📍 {evt.location}</div>
-                    )}
-                    <Link
-                      href={isLoggedIn ? '/dashboard/events' : '/register'}
-                      className="block text-center bg-emerald-50 hover:bg-emerald-600 hover:text-white text-emerald-700 font-semibold text-sm py-2.5 rounded-xl transition-colors"
-                    >
-                      {isLoggedIn ? 'RSVP to Attend' : 'Register to Join'}
-                    </Link>
-                  </div>
-                </div>
-              ))}
+                return (
+                  <Link
+                    key={evt.id}
+                    href={`/events/${evt.id}`}
+                    className="group bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Image Thumbnail */}
+                      {evt.imageUrl && (
+                        <div className="h-48 w-full overflow-hidden bg-gray-100 relative">
+                          <img
+                            src={evt.imageUrl}
+                            alt={evt.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute top-3 left-3 flex gap-1.5">
+                            <span
+                              className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full text-white shadow ${
+                                isPast ? 'bg-amber-600' : 'bg-emerald-600'
+                              }`}
+                            >
+                              {isPast ? 'Past Event' : 'Upcoming'}
+                            </span>
+                            {evt.category && (
+                              <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-white/90 text-gray-800 backdrop-blur-xs shadow">
+                                {evt.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="p-6">
+                        {!evt.imageUrl && (
+                          <div className="flex items-center justify-between mb-3">
+                            <span
+                              className={`text-xs font-bold px-3 py-1 rounded-full ${
+                                isPast ? 'bg-amber-50 text-amber-800' : 'bg-emerald-50 text-emerald-800'
+                              }`}
+                            >
+                              {isPast ? 'Past Inauguration' : 'Upcoming Summit'}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Media badges */}
+                        {(photoCount > 0 || videoCount > 0) && (
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            {photoCount > 0 && (
+                              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                📸 {photoCount} Photos
+                              </span>
+                            )}
+                            {videoCount > 0 && (
+                              <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                                🎥 Video Highlights
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        <h3 className="text-lg font-black text-gray-900 mb-2 leading-snug group-hover:text-emerald-600 transition-colors">
+                          {evt.title}
+                        </h3>
+                        <p className="text-gray-500 text-xs mb-4 leading-relaxed line-clamp-3">
+                          {evt.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="p-6 pt-0 border-t border-gray-50">
+                      <div className="text-xs font-semibold text-emerald-700 mb-1">
+                        {new Date(evt.startDate).toLocaleDateString('en-NG', {
+                          weekday: 'short',
+                          month: 'short',
+                          day: 'numeric',
+                          year: 'numeric',
+                        })}
+                      </div>
+                      {evt.location && (
+                        <div className="text-xs text-gray-500 mb-3 truncate">📍 {evt.location}</div>
+                      )}
+                      <div className="block text-center bg-emerald-50 group-hover:bg-emerald-600 group-hover:text-white text-emerald-700 font-bold text-xs py-2.5 rounded-xl transition-all">
+                        {isPast ? 'View Coverage & Pictures →' : 'View Event Details & RSVP →'}
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           )}
         </div>

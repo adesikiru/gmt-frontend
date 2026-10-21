@@ -20,8 +20,8 @@ export interface InecState extends InecItem {
 
 // Complete 36 States + FCT registered in INEC Portal
 export const INEC_STATES: InecState[] = [
-  { id: '28', name: 'Ogun', fullName: 'OGUN STATE', code: 'OG' }, // Default
- /*  { id: '1', name: 'Abia', fullName: '01 - ABIA', code: 'AB' },
+  { id: '28', name: 'Ogun', fullName: '27 - OGUN', code: 'OG' }, // Default
+  { id: '1', name: 'Abia', fullName: '01 - ABIA', code: 'AB' },
   { id: '2', name: 'Adamawa', fullName: '02 - ADAMAWA', code: 'AD' },
   { id: '3', name: 'Akwa Ibom', fullName: '03 - AKWA IBOM', code: 'AK' },
   { id: '4', name: 'Anambra', fullName: '04 - ANAMBRA', code: 'AN' },
@@ -56,7 +56,7 @@ export const INEC_STATES: InecState[] = [
   { id: '34', name: 'Sokoto', fullName: '33 - SOKOTO', code: 'SO' },
   { id: '35', name: 'Taraba', fullName: '34 - TARABA', code: 'TA' },
   { id: '36', name: 'Yobe', fullName: '35 - YOBE', code: 'YO' },
-  { id: '37', name: 'Zamfara', fullName: '36 - ZAMFARA', code: 'ZA' }, */
+  { id: '37', name: 'Zamfara', fullName: '36 - ZAMFARA', code: 'ZA' },
 ];
 
 const INEC_HEADERS = {

@@ -1,18 +1,14 @@
 'use client';
 
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import BrandLogo from '@/components/BrandLogo';
 
-export default function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+function DashboardNav() {
   const pathname = usePathname();
-  const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
 
   const navItems = [
     { label: 'Overview', href: '/dashboard', icon: '📊' },
@@ -25,6 +21,52 @@ export default function DashboardLayout({
         ]
       : []),
   ];
+
+  return (
+    <nav className="p-4 space-y-1.5">
+      {navItems.map((item) => {
+        const isActive = pathname === item.href;
+        return (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`flex items-center space-x-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
+              isActive
+                ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
+            }`}
+          >
+            <span className="text-lg">{item.icon}</span>
+            <span>{item.label}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function DashboardBreadcrumb() {
+  const pathname = usePathname();
+  const section = pathname.split('/')[2] || 'Overview';
+
+  return (
+    <div className="flex items-center space-x-2 text-sm text-gray-500">
+      <Link href="/" className="hover:text-emerald-600">Home</Link>
+      <span>/</span>
+      <span className="font-semibold text-gray-800 capitalize">
+        {section}
+      </span>
+    </div>
+  );
+}
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const router = useRouter();
+  const { user, logout } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -42,25 +84,9 @@ export default function DashboardLayout({
           </div>
 
           {/* Navigation Links */}
-          <nav className="p-4 space-y-1.5">
-            {navItems.map((item) => {
-              const isActive = pathname === item.href;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`flex items-center space-x-3 px-4 py-3 rounded-xl font-semibold text-sm transition-all ${
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-700 shadow-sm border border-emerald-200/60'
-                      : 'text-gray-600 hover:bg-gray-50 hover:text-emerald-600'
-                  }`}
-                >
-                  <span className="text-lg">{item.icon}</span>
-                  <span>{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+          <Suspense fallback={<div className="p-4 text-xs text-gray-400">Loading menu...</div>}>
+            <DashboardNav />
+          </Suspense>
         </div>
 
         {/* User Card & Logout */}
@@ -95,16 +121,12 @@ export default function DashboardLayout({
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col min-h-screen">
         <header className="h-16 bg-white border-b border-gray-100 flex items-center justify-between px-6 sticky top-0 z-30 shadow-xs">
-          <div className="flex items-center space-x-2 text-sm text-gray-500">
-            <Link href="/" className="hover:text-emerald-600">Home</Link>
-            <span>/</span>
-            <span className="font-semibold text-gray-800 capitalize">
-              {pathname.split('/')[2] || 'Overview'}
-            </span>
-          </div>
+          <Suspense fallback={<div className="text-sm text-gray-400">Dashboard</div>}>
+            <DashboardBreadcrumb />
+          </Suspense>
           <div className="flex items-center space-x-3">
             <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
-              🇳🇬 Ogun State Chapter
+              🇳🇬 Grassroots Movement
             </span>
           </div>
         </header>

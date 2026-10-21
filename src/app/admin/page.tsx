@@ -33,8 +33,14 @@ interface EventItem {
   title: string;
   description: string;
   location?: string;
+  category?: string;
   startDate: string;
   endDate?: string;
+  imageUrl?: string;
+  images?: string[];
+  videoUrl?: string;
+  videos?: string[];
+  isPast?: boolean;
   status: string;
   createdAt?: string;
   rsvpCount?: number;
@@ -89,16 +95,23 @@ export default function AdminDashboard() {
   // Events state
   const [events, setEvents] = useState<EventItem[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(true);
+  const [eventsFilter, setEventsFilter] = useState<'all' | 'upcoming' | 'past'>('all');
   const [showEventModal, setShowEventModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({
+  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [eventForm, setEventForm] = useState({
     title: '',
     category: 'Leadership Summit',
     description: '',
     location: '',
     startDate: '',
+    imageUrl: '',
+    imagesText: '',
+    videoUrl: '',
+    videosText: '',
+    isPast: false,
     publishNow: true,
   });
-  const [creatingEvent, setCreatingEvent] = useState(false);
+  const [savingEvent, setSavingEvent] = useState(false);
 
   // Empowerment state
   const [empowerments, setEmpowerments] = useState<EmpowermentItem[]>([]);
@@ -260,42 +273,105 @@ export default function AdminDashboard() {
     setActionLoading(null);
   };
 
-  // Create Event
-  const handleCreateEvent = async (e: React.FormEvent) => {
+  // Open modal for creating new event
+  const handleOpenCreateEvent = () => {
+    setEditingEvent(null);
+    setEventForm({
+      title: '',
+      category: 'Leadership Summit',
+      description: '',
+      location: '',
+      startDate: '',
+      imageUrl: '',
+      imagesText: '',
+      videoUrl: '',
+      videosText: '',
+      isPast: false,
+      publishNow: true,
+    });
+    setShowEventModal(true);
+  };
+
+  // Open modal for editing existing event
+  const handleOpenEditEvent = (ev: EventItem) => {
+    setEditingEvent(ev);
+    const dateFormatted = ev.startDate ? new Date(ev.startDate).toISOString().slice(0, 16) : '';
+    setEventForm({
+      title: ev.title,
+      category: ev.category || 'Leadership Summit',
+      description: ev.description,
+      location: ev.location || '',
+      startDate: dateFormatted,
+      imageUrl: ev.imageUrl || '',
+      imagesText: (ev.images || []).join('\n'),
+      videoUrl: ev.videoUrl || '',
+      videosText: (ev.videos || []).join('\n'),
+      isPast: !!ev.isPast,
+      publishNow: ev.status === 'PUBLISHED',
+    });
+    setShowEventModal(true);
+  };
+
+  // Save Event (Create or Update)
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEvent.title || !newEvent.startDate) return;
-    setCreatingEvent(true);
+    if (!eventForm.title || !eventForm.startDate) return;
+    setSavingEvent(true);
+
+    const imagesArray = eventForm.imagesText
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const videosArray = eventForm.videosText
+      .split(/[\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const payload = {
+      title: eventForm.title.trim(),
+      category: eventForm.category,
+      description: eventForm.description.trim(),
+      location: eventForm.location.trim(),
+      startDate: new Date(eventForm.startDate).toISOString(),
+      imageUrl: eventForm.imageUrl.trim() || undefined,
+      images: imagesArray.length > 0 ? imagesArray : undefined,
+      videoUrl: eventForm.videoUrl.trim() || undefined,
+      videos: videosArray.length > 0 ? videosArray : undefined,
+      isPast: eventForm.isPast,
+      status: eventForm.publishNow ? 'PUBLISHED' : 'DRAFT',
+    };
 
     try {
       if (token) {
-        const res = await api.events.create(token, {
-          title: newEvent.title,
-          description: newEvent.description,
-          location: newEvent.location,
-          startDate: new Date(newEvent.startDate).toISOString(),
-          status: newEvent.publishNow ? 'PUBLISHED' : 'DRAFT',
-        });
-        if (res.success) {
-          setShowEventModal(false);
-          setNewEvent({
-            title: '',
-            category: 'Leadership Summit',
-            description: '',
-            location: '',
-            startDate: '',
-            publishNow: true,
-          });
-          await fetchEvents();
-          alert('Event created successfully!');
+        if (editingEvent) {
+          // UPDATE
+          const res = await api.events.update(token, editingEvent.id, payload);
+          if (res.success) {
+            setShowEventModal(false);
+            setEditingEvent(null);
+            await fetchEvents();
+            alert('Event updated successfully!');
+          } else {
+            alert(res.message || 'Failed to update event');
+          }
         } else {
-          alert(res.message || 'Failed to create event');
+          // CREATE
+          const res = await api.events.create(token, payload);
+          if (res.success) {
+            setShowEventModal(false);
+            await fetchEvents();
+            alert('Event created successfully!');
+          } else {
+            alert(res.message || 'Failed to create event');
+          }
         }
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to create event. Please check backend connection.');
+      alert('Failed to save event. Please check backend connection.');
     }
-    setCreatingEvent(false);
+    setSavingEvent(false);
   };
 
   // Delete Event
@@ -770,19 +846,47 @@ export default function AdminDashboard() {
         {/* TAB 2: EVENTS */}
         {activeTab === 'events' && (
           <div className="space-y-6">
-            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm flex justify-between items-center">
+            <div className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <div>
-                <h2 className="text-lg font-black text-gray-900">Upcoming GMT Events & Congresses</h2>
+                <h2 className="text-lg font-black text-gray-900">GMT Events &amp; State Inaugurations</h2>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  Manage events shown on the public landing page and member portal.
+                  Publish summits, campaign flag-offs, or edit past inauguration coverage, photos, and videos.
                 </p>
               </div>
-              <button
-                onClick={() => setShowEventModal(true)}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-sm"
-              >
-                ＋ Add Event
-              </button>
+              <div className="flex items-center gap-3">
+                <div className="flex bg-gray-100 p-1 rounded-xl text-xs font-bold border border-gray-200">
+                  <button
+                    onClick={() => setEventsFilter('all')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      eventsFilter === 'all' ? 'bg-white text-gray-900 shadow-xs' : 'text-gray-500'
+                    }`}
+                  >
+                    All ({events.length})
+                  </button>
+                  <button
+                    onClick={() => setEventsFilter('upcoming')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      eventsFilter === 'upcoming' ? 'bg-emerald-600 text-white shadow-xs' : 'text-gray-500'
+                    }`}
+                  >
+                    Upcoming ({events.filter((e) => !e.isPast).length})
+                  </button>
+                  <button
+                    onClick={() => setEventsFilter('past')}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      eventsFilter === 'past' ? 'bg-amber-600 text-white shadow-xs' : 'text-gray-500'
+                    }`}
+                  >
+                    Past ({events.filter((e) => e.isPast).length})
+                  </button>
+                </div>
+                <button
+                  onClick={handleOpenCreateEvent}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-sm"
+                >
+                  ＋ Add Event
+                </button>
+              </div>
             </div>
 
             {loadingEvents ? (
@@ -792,58 +896,137 @@ export default function AdminDashboard() {
             ) : events.length === 0 ? (
               <div className="bg-white rounded-3xl border border-gray-100 p-16 text-center text-gray-400 space-y-2">
                 <div className="text-3xl">📅</div>
-                <h3 className="font-bold text-gray-700 text-base">No upcoming events scheduled at this time.</h3>
+                <h3 className="font-bold text-gray-700 text-base">No events scheduled at this time.</h3>
                 <p className="text-xs text-gray-400">
-                  Click &quot;Add Event&quot; above to create official rallies, summits, and ward meetings.
+                  Click &quot;Add Event&quot; above to create official rallies, summits, and inauguration archives.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {events.map((ev) => (
-                  <div
-                    key={ev.id}
-                    className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
-                  >
-                    <div className="space-y-3">
-                      <div className="flex justify-between items-start">
-                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {ev.status}
-                        </span>
-                        <button
-                          onClick={() => handleDeleteEvent(ev.id)}
-                          className="text-gray-400 hover:text-rose-600 text-xs font-bold transition-colors"
-                        >
-                          ✕ Delete
-                        </button>
-                      </div>
-                      <h3 className="text-lg font-black text-gray-900">{ev.title}</h3>
-                      <p className="text-xs text-gray-600 leading-relaxed">{ev.description}</p>
-                      <div className="space-y-1.5 pt-2 text-xs text-gray-500">
-                        <div>
-                          📍 <strong className="text-gray-700">{ev.location ?? 'Venue TBA'}</strong>
-                        </div>
-                        <div>
-                          📅{' '}
-                          <strong className="text-gray-700">
-                            {new Date(ev.startDate).toLocaleDateString('en-NG', {
-                              weekday: 'short',
-                              year: 'numeric',
-                              month: 'short',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </strong>
-                        </div>
-                        {ev.rsvpCount !== undefined && (
-                          <div className="text-emerald-700 font-bold pt-1">
-                            👥 {ev.rsvpCount} Attending
+                {events
+                  .filter((ev) => {
+                    if (eventsFilter === 'upcoming') return !ev.isPast;
+                    if (eventsFilter === 'past') return !!ev.isPast;
+                    return true;
+                  })
+                  .map((ev) => {
+                    const photoCount = (ev.images?.length || 0) + (ev.imageUrl ? 1 : 0);
+                    const videoCount = (ev.videos?.length || 0) + (ev.videoUrl ? 1 : 0);
+
+                    return (
+                      <div
+                        key={ev.id}
+                        className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-3">
+                          {ev.imageUrl && (
+                            <div className="h-40 w-full rounded-2xl overflow-hidden bg-gray-100">
+                              <img
+                                src={ev.imageUrl}
+                                alt={ev.title}
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-start">
+                            <div className="flex flex-wrap gap-2">
+                              <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                {ev.status}
+                              </span>
+                              <span
+                                className={`text-xs font-bold px-3 py-1 rounded-full ${
+                                  ev.isPast
+                                    ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                    : 'bg-blue-50 text-blue-800 border border-blue-200'
+                                }`}
+                              >
+                                {ev.isPast ? 'Past Inauguration' : 'Upcoming Event'}
+                              </span>
+                              {ev.category && (
+                                <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">
+                                  {ev.category}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                              <button
+                                onClick={() => handleOpenEditEvent(ev)}
+                                className="text-emerald-700 hover:text-emerald-800 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-lg text-xs font-bold transition-colors"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button
+                                onClick={() => handleDeleteEvent(ev.id)}
+                                className="text-gray-400 hover:text-rose-600 px-2 py-1 text-xs font-bold transition-colors"
+                              >
+                                ✕ Delete
+                              </button>
+                            </div>
                           </div>
-                        )}
+
+                          <h3 className="text-lg font-black text-gray-900">{ev.title}</h3>
+                          <p className="text-xs text-gray-600 leading-relaxed line-clamp-3">{ev.description}</p>
+
+                          {(photoCount > 0 || videoCount > 0) && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {photoCount > 0 && (
+                                <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">
+                                  📸 {photoCount} Photos Attached
+                                </span>
+                              )}
+                              {videoCount > 0 && (
+                                <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-100">
+                                  🎥 {videoCount} Videos Attached
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          <div className="space-y-1.5 pt-2 text-xs text-gray-500 border-t border-gray-100">
+                            <div>
+                              📍 <strong className="text-gray-700">{ev.location ?? 'Venue TBA'}</strong>
+                            </div>
+                            <div>
+                              📅{' '}
+                              <strong className="text-gray-700">
+                                {new Date(ev.startDate).toLocaleDateString('en-NG', {
+                                  weekday: 'short',
+                                  year: 'numeric',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </strong>
+                            </div>
+                            {ev.rsvpCount !== undefined && (
+                              <div className="text-emerald-700 font-bold pt-1">
+                                👥 {ev.rsvpCount} Attending
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-gray-50 flex justify-between items-center">
+                          <Link
+                            href={`/events/${ev.id}`}
+                            target="_blank"
+                            className="text-xs font-bold text-emerald-600 hover:underline inline-flex items-center gap-1"
+                          >
+                            👁️ View Dedicated Page ↗
+                          </Link>
+                          <button
+                            onClick={() => handleOpenEditEvent(ev)}
+                            className="text-xs font-bold text-gray-600 hover:text-emerald-700"
+                          >
+                            Edit details &amp; media →
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                ))}
+                    );
+                  })}
               </div>
             )}
           </div>
@@ -1072,56 +1255,69 @@ export default function AdminDashboard() {
       )}
 
       {/* CREATE EVENT MODAL */}
+      {/* CREATE / EDIT EVENT MODAL */}
       {showEventModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative space-y-5">
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative space-y-5 my-8">
             <div className="flex justify-between items-start border-b border-gray-100 pb-3">
               <div>
-                <h3 className="text-lg font-black text-gray-900">Create Upcoming Event</h3>
-                <p className="text-xs text-gray-500">Publish a new meeting, summit, or empowerment drive</p>
+                <h3 className="text-lg font-black text-gray-900">
+                  {editingEvent ? 'Edit GMT Event' : 'Create GMT Event'}
+                </h3>
+                <p className="text-xs text-gray-500">
+                  {editingEvent
+                    ? 'Update event agenda, timing, photo gallery, or video coverage'
+                    : 'Publish an upcoming summit, campaign flag-off, or archive a past state inauguration'}
+                </p>
               </div>
               <button
-                onClick={() => setShowEventModal(false)}
+                onClick={() => {
+                  setShowEventModal(false);
+                  setEditingEvent(null);
+                }}
                 className="text-gray-400 hover:text-gray-600 text-lg font-bold p-1"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleCreateEvent} className="space-y-4 text-xs font-semibold">
+            <form onSubmit={handleSaveEvent} className="space-y-4 text-xs font-semibold">
               <div>
                 <label className="block text-gray-700 mb-1">Event Title *</label>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Ogun State Youth Tech & Empowerment Congress"
-                  value={newEvent.title}
-                  onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })}
+                  placeholder="e.g. Delta State Chapter Grand Inauguration Ceremony"
+                  value={eventForm.title}
+                  onChange={(e) => setEventForm({ ...eventForm, title: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-normal"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-gray-700 mb-1">Category</label>
                   <select
-                    value={newEvent.category}
-                    onChange={(e) => setNewEvent({ ...newEvent, category: e.target.value })}
+                    value={eventForm.category}
+                    onChange={(e) => setEventForm({ ...eventForm, category: e.target.value })}
                     className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs bg-white"
                   >
+                    <option value="Inauguration Ceremony">Inauguration Ceremony</option>
+                    <option value="Campaign Flag-Off">Campaign Flag-Off</option>
                     <option value="Leadership Summit">Leadership Summit</option>
-                    <option value="Training">Training Workshop</option>
+                    <option value="Training Workshop">Training Workshop</option>
                     <option value="Empowerment">Empowerment</option>
-                    <option value="Townhall">Ward Townhall</option>
+                    <option value="Ward Townhall">Ward Townhall</option>
                   </select>
                 </div>
+
                 <div>
-                  <label className="block text-gray-700 mb-1">Date & Time *</label>
+                  <label className="block text-gray-700 mb-1">Date &amp; Time *</label>
                   <input
                     type="datetime-local"
                     required
-                    value={newEvent.startDate}
-                    onChange={(e) => setNewEvent({ ...newEvent, startDate: e.target.value })}
+                    value={eventForm.startDate}
+                    onChange={(e) => setEventForm({ ...eventForm, startDate: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
                   />
                 </div>
@@ -1132,51 +1328,111 @@ export default function AdminDashboard() {
                 <input
                   type="text"
                   required
-                  placeholder="e.g. June 12 Cultural Centre, Kuto, Abeokuta"
-                  value={newEvent.location}
-                  onChange={(e) => setNewEvent({ ...newEvent, location: e.target.value })}
+                  placeholder="e.g. The Dome Event Centre, Okpanam Road, Asaba, Delta State"
+                  value={eventForm.location}
+                  onChange={(e) => setEventForm({ ...eventForm, location: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm font-normal"
                 />
               </div>
 
+              {/* Event Type: Upcoming vs Past */}
+              <div className="p-3 bg-gray-50 rounded-2xl border border-gray-200/80 flex items-center justify-between">
+                <div>
+                  <span className="block text-xs font-bold text-gray-900">Past Event / Inauguration Record</span>
+                  <span className="block text-[11px] text-gray-500 font-normal">
+                    Check this if the event has already taken place (e.g. Delta or Zamfara inauguration).
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  id="isPastToggle"
+                  checked={eventForm.isPast}
+                  onChange={(e) => setEventForm({ ...eventForm, isPast: e.target.checked })}
+                  className="w-5 h-5 text-emerald-600 rounded focus:ring-emerald-500"
+                />
+              </div>
+
               <div>
-                <label className="block text-gray-700 mb-1">Description</label>
+                <label className="block text-gray-700 mb-1">Full Description &amp; Agenda</label>
                 <textarea
-                  rows={3}
-                  placeholder="Describe the agenda, who should attend, and expected objectives..."
-                  value={newEvent.description}
-                  onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })}
+                  rows={4}
+                  placeholder="Describe the inaugural swearing-in, attendees, keynote address, and resolutions..."
+                  value={eventForm.description}
+                  onChange={(e) => setEventForm({ ...eventForm, description: e.target.value })}
                   className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
                 ></textarea>
+              </div>
+
+              {/* Media: Main Cover Image */}
+              <div>
+                <label className="block text-gray-700 mb-1">Cover Image URL (Featured Banner)</label>
+                <input
+                  type="url"
+                  placeholder="https://images.unsplash.com/... or https://..."
+                  value={eventForm.imageUrl}
+                  onChange={(e) => setEventForm({ ...eventForm, imageUrl: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
+                />
+              </div>
+
+              {/* Media: Photo Gallery */}
+              <div>
+                <label className="block text-gray-700 mb-1">
+                  Additional Event Photo URLs (One URL per line or separated by comma)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="https://... photo 1&#10;https://... photo 2"
+                  value={eventForm.imagesText}
+                  onChange={(e) => setEventForm({ ...eventForm, imagesText: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal font-mono text-[11px]"
+                ></textarea>
+              </div>
+
+              {/* Media: Video Coverage */}
+              <div>
+                <label className="block text-gray-700 mb-1">
+                  Video Coverage URL (YouTube Link or MP4 URL)
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://www.youtube.com/watch?v=... or direct MP4 link"
+                  value={eventForm.videoUrl}
+                  onChange={(e) => setEventForm({ ...eventForm, videoUrl: e.target.value })}
+                  className="w-full px-3.5 py-2 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-xs font-normal"
+                />
               </div>
 
               <div className="flex items-center space-x-2 pt-1">
                 <input
                   type="checkbox"
                   id="publishNow"
-                  checked={newEvent.publishNow}
-                  onChange={(e) => setNewEvent({ ...newEvent, publishNow: e.target.checked })}
+                  checked={eventForm.publishNow}
+                  onChange={(e) => setEventForm({ ...eventForm, publishNow: e.target.checked })}
                   className="w-4 h-4 text-emerald-600 rounded focus:ring-emerald-500"
                 />
                 <label htmlFor="publishNow" className="text-gray-700 text-xs font-bold cursor-pointer">
-                  Publish immediately to Public and Member portal
+                  Publish to Public Landing Page &amp; Member Portal
                 </label>
               </div>
 
               <div className="flex justify-end space-x-3 pt-3">
                 <button
                   type="button"
-                  onClick={() => setShowEventModal(false)}
+                  onClick={() => {
+                    setShowEventModal(false);
+                    setEditingEvent(null);
+                  }}
                   className="bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold px-4 py-2.5 rounded-xl transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  disabled={creatingEvent}
+                  disabled={savingEvent}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-5 py-2.5 rounded-xl transition-colors shadow-sm disabled:opacity-50"
                 >
-                  {creatingEvent ? 'Creating...' : 'Publish Event'}
+                  {savingEvent ? 'Saving...' : editingEvent ? 'Save Changes' : 'Publish Event'}
                 </button>
               </div>
             </form>

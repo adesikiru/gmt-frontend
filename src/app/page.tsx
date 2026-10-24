@@ -1,11 +1,17 @@
 'use client';
 // Build trigger: fix-vercel-prerender-v1.0.1
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import BrandLogo from '@/components/BrandLogo';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
+import {
+  GalleryItem,
+  defaultGalleryItems,
+  extractMediaFromEvents,
+  extractYouTubeId,
+} from '@/lib/gallery-data';
 
 interface ApiEvent {
   id: string;
@@ -89,12 +95,18 @@ export default function Home() {
   const [eventsLoading, setEventsLoading] = useState(true);
   const [empowermentList, setEmpowermentList] = useState(defaultEmpowerments);
   const [newsList, setNewsList] = useState(defaultMediaItems);
+  const [galleryItems, setGalleryItems] = useState<GalleryItem[]>(defaultGalleryItems);
+  const [galleryFilter, setGalleryFilter] = useState<'all' | 'photo' | 'video'>('all');
+  const [activePhoto, setActivePhoto] = useState<GalleryItem | null>(null);
+  const [activeVideo, setActiveVideo] = useState<GalleryItem | null>(null);
 
   useEffect(() => {
-    // 1. Fetch live events
+    // 1. Fetch live events & aggregate media
     api.events.list().then((res) => {
       if (res.success && Array.isArray(res.data) && res.data.length > 0) {
         setEvents(res.data as ApiEvent[]);
+        const extracted = extractMediaFromEvents(res.data as ApiEvent[]);
+        setGalleryItems(extracted);
       }
     }).catch(() => {}).finally(() => setEventsLoading(false));
 
@@ -151,6 +163,7 @@ export default function Home() {
             <div className="hidden md:flex items-center space-x-8 text-sm font-semibold text-gray-600">
               <Link href="#about" className="hover:text-emerald-600 transition-colors">About Us</Link>
               <Link href="#events" className="hover:text-emerald-600 transition-colors">Events</Link>
+              <Link href="#gallery" className="hover:text-emerald-600 transition-colors">Gallery</Link>
               <Link href="#empowerments" className="hover:text-emerald-600 transition-colors">Empowerment</Link>
               <Link href="#media" className="hover:text-emerald-600 transition-colors">Media &amp; News</Link>
             </div>
@@ -240,6 +253,7 @@ export default function Home() {
               {[
                 { href: '#about', label: 'About Us' },
                 { href: '#events', label: 'Events' },
+                { href: '#gallery', label: 'Gallery' },
                 { href: '#empowerments', label: 'Empowerment' },
                 { href: '#media', label: 'Media & News' },
               ].map((link) => (
@@ -566,6 +580,177 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Gallery Section — Photos & Videos Preview with 'See More' to /gallery */}
+      <section id="gallery" className="py-24 bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12">
+            <div>
+              <span className="text-xs font-bold uppercase tracking-widest text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100 shadow-2xs">
+                📸 Visual Archives &amp; Live Media
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-extrabold text-gray-900 mt-4">
+                GMT Moments, Inaugurations &amp; Grassroots Action
+              </h2>
+              <p className="text-gray-500 text-sm mt-2 max-w-2xl">
+                Explore high-definition photo galleries and video coverage from our state chapter inaugurations,
+                ward rallies, and citizen empowerment drives across Nigeria.
+              </p>
+            </div>
+            <Link
+              href="/gallery"
+              className="mt-4 md:mt-0 inline-flex items-center space-x-2 text-sm font-bold text-emerald-600 hover:text-emerald-700 group bg-emerald-50 hover:bg-emerald-100 px-4 py-2.5 rounded-xl border border-emerald-200 transition-all shrink-0"
+            >
+              <span>See More in Full Gallery</span>
+              <span className="group-hover:translate-x-1 transition-transform">&rarr;</span>
+            </Link>
+          </div>
+
+          {/* Quick Filter Tabs */}
+          <div className="flex items-center gap-2 mb-8 bg-gray-50 p-1.5 rounded-2xl w-fit border border-gray-100">
+            <button
+              onClick={() => setGalleryFilter('all')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
+                galleryFilter === 'all'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              All Highlights ({galleryItems.length})
+            </button>
+            <button
+              onClick={() => setGalleryFilter('photo')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                galleryFilter === 'photo'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span>📸</span>
+              <span>Photos ({galleryItems.filter((i) => i.type === 'photo').length})</span>
+            </button>
+            <button
+              onClick={() => setGalleryFilter('video')}
+              className={`px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 ${
+                galleryFilter === 'video'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span>🎥</span>
+              <span>Videos ({galleryItems.filter((i) => i.type === 'video').length})</span>
+            </button>
+          </div>
+
+          {/* Media Grid Preview (Top 6 Items) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+            {galleryItems
+              .filter((item) => (galleryFilter === 'all' ? true : item.type === galleryFilter))
+              .slice(0, 6)
+              .map((item) => {
+                const isVideo = item.type === 'video';
+                return (
+                  <div
+                    key={item.id}
+                    onClick={() => {
+                      if (isVideo) setActiveVideo(item);
+                      else setActivePhoto(item);
+                    }}
+                    className="group cursor-pointer bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+                  >
+                    <div>
+                      {/* Image or Video Thumbnail */}
+                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-900">
+                        <img
+                          src={isVideo ? item.thumbnailUrl || item.url : item.url}
+                          alt={item.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-108"
+                          loading="lazy"
+                        />
+
+                        {/* Badges */}
+                        <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
+                          <span
+                            className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white shadow-md ${
+                              isVideo ? 'bg-rose-600' : 'bg-emerald-600'
+                            }`}
+                          >
+                            {isVideo ? '🎥 Video' : '📸 Photo'}
+                          </span>
+                          {item.category && (
+                            <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-black/60 text-white backdrop-blur-xs shadow-md">
+                              {item.category}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Video Play Overlay */}
+                        {isVideo ? (
+                          <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors flex items-center justify-center">
+                            <div className="w-13 h-13 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg group-hover:scale-115 transition-transform duration-300">
+                              <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                                <path d="M8 5v14l11-7z" />
+                              </svg>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5">
+                            <span>🔍 Expand Photo</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Info Content */}
+                      <div className="p-5">
+                        <h3 className="font-bold text-gray-900 text-sm mb-1.5 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors">
+                          {item.title}
+                        </h3>
+                        <p className="text-gray-500 text-xs line-clamp-2 leading-relaxed mb-3">
+                          {item.description}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="px-5 pb-5 pt-0 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400 mt-auto">
+                      <span className="font-medium text-emerald-700">{item.date || 'GMT Archive'}</span>
+                      {item.location && (
+                        <span className="truncate max-w-[140px] text-gray-500">📍 {item.location}</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+
+          {/* 'See More' Call To Action Card */}
+          <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-emerald-800 via-green-700 to-teal-800 text-white p-8 sm:p-10 shadow-lg flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-2 text-center md:text-left">
+              <div className="inline-flex items-center space-x-2 text-emerald-200 text-xs font-bold uppercase tracking-wider">
+                <span>📁 Complete Media Repository</span>
+                <span>•</span>
+                <span>{galleryItems.length} Total Pictures &amp; Videos</span>
+              </div>
+              <h3 className="text-xl sm:text-2xl font-black text-white">
+                Looking for more moments, inaugurations, and photo archives?
+              </h3>
+              <p className="text-emerald-100 text-xs sm:text-sm max-w-xl">
+                Browse our comprehensive visual directory with category filters, full-screen lightbox previews,
+                and high-definition video broadcasts from every geopolitical zone.
+              </p>
+            </div>
+
+            <Link
+              href="/gallery"
+              className="shrink-0 bg-white hover:bg-emerald-50 text-emerald-900 font-extrabold text-sm px-7 py-4 rounded-2xl shadow-md transition-all hover:scale-102 flex items-center space-x-2"
+            >
+              <span>See More in Full Gallery ({galleryItems.length})</span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M14 5l7 7m0 0l-7 7m7-7H3" />
+              </svg>
+            </Link>
+          </div>
+        </div>
+      </section>
+
       {/* Empowerment Programs Section */}
       <section id="empowerments" className="py-24 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -715,6 +900,7 @@ export default function Home() {
               <ul className="space-y-2 text-sm">
                 <li><Link href="#about" className="hover:text-emerald-400 transition-colors">About Movement</Link></li>
                 <li><Link href="#events" className="hover:text-emerald-400 transition-colors">Events &amp; Congress</Link></li>
+                <li><Link href="/gallery" className="hover:text-emerald-400 transition-colors font-medium text-emerald-300">Media Gallery</Link></li>
                 <li><Link href="#empowerments" className="hover:text-emerald-400 transition-colors">Empowerment Funds</Link></li>
                 <li><Link href="#media" className="hover:text-emerald-400 transition-colors">Press &amp; Media</Link></li>
               </ul>
@@ -751,6 +937,145 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      {/* PHOTO LIGHTBOX MODAL */}
+      {activePhoto && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setActivePhoto(null)}
+        >
+          <button
+            onClick={() => setActivePhoto(null)}
+            className="absolute top-4 right-4 z-50 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 transition-all"
+            aria-label="Close photo view"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div
+            className="relative max-w-4xl w-full bg-gray-950 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative flex-1 min-h-[300px] sm:min-h-[440px] bg-black flex items-center justify-center overflow-hidden">
+              <img
+                src={activePhoto.url}
+                alt={activePhoto.title}
+                className="max-h-[65vh] w-auto max-w-full object-contain select-none"
+              />
+            </div>
+            <div className="p-5 sm:p-6 bg-gray-900 border-t border-gray-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-600 px-2 py-0.5 rounded-full">
+                  {activePhoto.category}
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white leading-tight">
+                  {activePhoto.title}
+                </h3>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  {activePhoto.description}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-gray-400 pt-1">
+                  {activePhoto.date && <span>📅 {activePhoto.date}</span>}
+                  {activePhoto.location && <span>📍 {activePhoto.location}</span>}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href="/gallery"
+                  onClick={() => setActivePhoto(null)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2 rounded-xl transition-all shadow-xs"
+                >
+                  See Full Gallery →
+                </Link>
+                <a
+                  href={activePhoto.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-medium px-4 py-2 rounded-xl transition-colors border border-gray-700"
+                >
+                  Full Resolution ↗
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* VIDEO PLAYER MODAL */}
+      {activeVideo && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 sm:p-6"
+          onClick={() => setActiveVideo(null)}
+        >
+          <button
+            onClick={() => setActiveVideo(null)}
+            className="absolute top-4 right-4 z-50 text-white/80 hover:text-white bg-black/50 hover:bg-black/80 rounded-full p-2.5 transition-all"
+            aria-label="Close video player"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+
+          <div
+            className="relative max-w-4xl w-full bg-gray-950 rounded-3xl overflow-hidden shadow-2xl flex flex-col border border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative w-full aspect-video bg-black flex items-center justify-center">
+              {(() => {
+                const ytId = extractYouTubeId(activeVideo.url);
+                if (ytId) {
+                  return (
+                    <iframe
+                      src={`https://www.youtube.com/embed/${ytId}?autoplay=1`}
+                      title={activeVideo.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
+                  );
+                }
+                return (
+                  <video
+                    src={activeVideo.url}
+                    controls
+                    autoPlay
+                    className="w-full h-full object-contain"
+                  >
+                    Your browser does not support HTML5 video.
+                  </video>
+                );
+              })()}
+            </div>
+            <div className="p-5 sm:p-6 bg-gray-900 border-t border-gray-800 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider bg-rose-600 px-2 py-0.5 rounded-full">
+                  Video Recording
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  {activeVideo.title}
+                </h3>
+                <p className="text-xs text-gray-300">
+                  {activeVideo.description}
+                </p>
+                <div className="flex items-center gap-4 text-xs text-gray-400 pt-1">
+                  {activeVideo.date && <span>📅 {activeVideo.date}</span>}
+                  {activeVideo.location && <span>📍 {activeVideo.location}</span>}
+                </div>
+              </div>
+              <Link
+                href="/gallery"
+                onClick={() => setActiveVideo(null)}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-all shrink-0"
+              >
+                See Full Gallery →
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

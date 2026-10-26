@@ -474,7 +474,7 @@ export default function GalleryPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
             {filteredItems.map((item) => {
               const isVideo = item.type === 'video';
 
@@ -485,66 +485,31 @@ export default function GalleryPage() {
                     if (isVideo) setActiveVideo(item);
                     else setActivePhoto(item);
                   }}
-                  className="group cursor-pointer bg-white rounded-3xl border border-gray-100/90 overflow-hidden shadow-xs hover:shadow-xl hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between"
+                  className="group cursor-pointer rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:-translate-y-0.5 transition-all duration-300 relative"
                 >
-                  <div>
-                    {/* Media Thumbnail Container */}
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-gray-900">
-                      <img
-                        src={isVideo ? item.thumbnailUrl || item.url : item.url}
-                        alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-108"
-                        loading="lazy"
-                      />
+                  {/* Image */}
+                  <div className="relative aspect-square w-full overflow-hidden bg-gray-200">
+                    <img
+                      src={isVideo ? item.thumbnailUrl || item.url : item.url}
+                      alt={item.title}
+                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      loading="lazy"
+                    />
 
-                      {/* Top Badges */}
-                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-none">
-                        <span
-                          className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full text-white shadow-md ${
-                            isVideo ? 'bg-rose-600' : 'bg-emerald-600'
-                          }`}
-                        >
-                          {isVideo ? '🎥 Video' : '📸 Photo'}
-                        </span>
-                        {item.category && (
-                          <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-black/60 text-white backdrop-blur-xs shadow-md">
-                            {item.category}
-                          </span>
-                        )}
+                    {/* Video Play Button Overlay */}
+                    {isVideo && (
+                      <div className="absolute inset-0 bg-black/25 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                        <div className="w-12 h-12 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-300">
+                          <svg className="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </div>
                       </div>
+                    )}
 
-                      {/* Video Play Button Overlay */}
-                      {isVideo ? (
-                        <div className="absolute inset-0 bg-black/30 group-hover:bg-black/15 transition-colors flex items-center justify-center">
-                          <div className="w-14 h-14 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-lg group-hover:scale-115 transition-transform duration-300">
-                            <svg className="w-7 h-7 fill-current ml-0.5" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-bold gap-1.5">
-                          <span>🔍 Expand Photo</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Metadata Content */}
-                    <div className="p-5">
-                      <h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2 leading-snug group-hover:text-emerald-700 transition-colors">
-                        {item.title}
-                      </h3>
-                      <p className="text-gray-500 text-xs line-clamp-2 leading-relaxed mb-3">
-                        {item.description}
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Card Footer */}
-                  <div className="px-5 pb-5 pt-0 border-t border-gray-50 flex items-center justify-between text-[11px] text-gray-400 mt-auto">
-                    <span className="font-medium text-emerald-700">{item.date || 'GMT Archive'}</span>
-                    {item.location && (
-                      <span className="truncate max-w-[140px] text-gray-500">📍 {item.location}</span>
+                    {/* Subtle hover zoom indicator for photos */}
+                    {!isVideo && (
+                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-all duration-300" />
                     )}
                   </div>
                 </div>
